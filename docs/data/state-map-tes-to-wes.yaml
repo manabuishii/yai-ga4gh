@@ -1,0 +1,15 @@
+# TES のタスクの状態 → WES の TaskLog の扱いと、run の状態への効き方(docs/design/system.md C-06)
+# task_view: WES の TaskLog にそのまま出す状態(WES 1.1.0 の TaskLog には state の欄が無いので、system_logs の先頭行に "state=<TES の状態>" を書く、仮)
+# run_event: wes-states.yaml の on に渡す出来事
+map:
+  QUEUED:         {run_event: null}
+  INITIALIZING:   {run_event: null}
+  RUNNING:        {run_event: task_progress}
+  COMPLETE:       {run_event: null, note: 全タスクがこれになったら all_tasks_complete}
+  EXECUTOR_ERROR: {run_event: task_executor_error}
+  SYSTEM_ERROR:   {run_event: task_system_error, note: 例外 — executor が全部 0 で終わり、宣言した出力が tesTaskLog.metadata の yai.missing_outputs にあるときは task_executor_error(CWL の出力が無い。wes.md 1 節、D-026)}
+  CANCELING:      {run_event: null}
+  CANCELED:       {run_event: task_system_error, note: WES が取り消していないのに CANCELED になった(誰かが TES を直接取り消した)ときは SYSTEM_ERROR}
+  PAUSED:         {run_event: null, note: yai-tes は出さない。他の TES が出したら待つ}
+  PREEMPTED:      {run_event: task_system_error, note: 最小版は再試行しない}
+  UNKNOWN:        {run_event: null, note: 読めない間は run を終わらせない。30 分続いたら tes_unreachable_timeout と同じ扱い。知っている状態を読めたら数え直し}

@@ -1,0 +1,37 @@
+# Second Caddy for the partners' names (stage 3). Same *.yai.test certificate as the main stack. No access log
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+(yai_tls) {
+	tls /certs/server.pem /certs/server-key.pem
+}
+
+funnel.yai.test:443 {
+	import yai_tls
+	reverse_proxy funnel:8000
+}
+
+pgdrs.yai.test:443 {
+	import yai_tls
+	reverse_proxy pgdrs:8645
+}
+
+# The playground DRS always returns access URLs as http://pgdrs.yai.test:8645/..., so accept that plain-http port too
+http://pgdrs.yai.test:8645 {
+	reverse_proxy pgdrs:8645
+}
+
+sapporo.yai.test:443 {
+	import yai_tls
+	reverse_proxy sapporo:1122
+}
+
+broker.yai.test:443 {
+	import yai_tls
+	reverse_proxy hydra:4444
+}

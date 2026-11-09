@@ -1,0 +1,8 @@
+{
+  "boxes": ["aai", "drs", "tes", "wes", "pytes", "funnel", "sapporo", "pgdrs", "playground", "client", "wesclient", "toil", "nextflow", "indexd", "keycloak"],
+  "containers": {"yai": ["aai", "drs", "tes", "wes"], "first": ["pytes", "funnel", "sapporo", "pgdrs", "playground", "client"], "next": ["wesclient", "toil", "nextflow", "indexd", "keycloak"]},
+  "deps": ["pytes->tes", "wes->funnel", "client->sapporo", "wes->pgdrs", "playground->drs", "wesclient->wes", "client->toil", "nextflow->drs", "wes->indexd", "keycloak->drs"],
+  "forbidden": ["tes->pytes", "funnel->wes", "drs->playground"],
+  "exhaustive": true,
+  "allowOrphans": ["aai"]
+}

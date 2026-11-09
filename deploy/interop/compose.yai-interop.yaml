@@ -1,0 +1,13 @@
+# Overlay on the main stack (-f compose.yaml -f interop/compose.yai-interop.yaml):
+# switches the four services to the interop configs (local/interop/config/, made by deploy/interop/setup.sh);
+# the main Caddy is not told the partners' names (the interop proxy serves them).
+# With YAI_WES_CONFIG set to wes-funnel.yaml, the TES of WES is Funnel (INTEROP-TES-2)
+services:
+  drs:
+    command: [yai, serve, drs, --config, /yai/local/interop/config/drs.yaml, --host, 0.0.0.0, --port, "8402"]
+  tes:
+    command: [yai, serve, tes, --config, /yai/local/interop/config/tes.yaml, --host, 0.0.0.0, --port, "8403"]
+  tes-worker:
+    command: [yai, tes, worker, --config, /yai/local/interop/config/tes.yaml]
+  wes:
+    command: [yai, serve, wes, --config, "${YAI_WES_CONFIG:-/yai/local/interop/config/wes.yaml}", --host, 0.0.0.0, --port, "8404"]

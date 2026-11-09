@@ -1,0 +1,313 @@
+# 4 つをまとめたときの矛盾の確かめ表(C-01〜C-27)の原本。docs/design/system.md 9 節の表は
+# ここから tools/gen_diagram.py で作る(表の中は手で直さない)。関係図(docs/diagram.html)にも出す。
+#
+# 列(system.md 9 節の表と同じ): call=呼び出し、assume=呼ぶ側の前提、spec=呼ばれる側の仕様、
+#   verdict=判定(合う・注意・合わない の 3 つだけ)、fix=合わせ方、stage=段階、test=試験(表に出す文字のまま)、
+#   expect=期待する結果
+# 図に結ぶ欄(D-032):
+#   where: 関係図(docs/data/diagram.yaml)の箱・矢印の ID。矢印の ①〜⑯ は system.md 4 節の番号
+#   gaps: 仕様の問題(docs/data/spec-gaps.yaml)。表の文に書いた G 番号は必ず入れる(道具が確かめる)。
+#         文に無い G 番号は実装の担当が中身から結んだもの(D-032)
+#   tests: test の文字が試験 ID の並びでないとき(「後」・「DRS-BULK-*」)の、実際の試験 ID。
+#          省くと test を「, 」で分けたものになる
+rows:
+- id: C-01
+  call: WES → DRS(⑤⑥)
+  assume: Passport を Bearer で送れば通る
+  spec: DRS は Passport を POST 本文 `passports` でだけ受ける(GET では渡せない)。Auth 節の `tokens[]` は本文と食い違う
+  verdict: 注意
+  fix: WES の解決役は POST だけを使い、本文は `passports`(G-DRS-03)
+  stage: '2'
+  test: INT-DRS-POST
+  expect: ⑥ が POST で本文に `passports` を持つ。`tokens` で送ると 400
+  where: [a56]
+  gaps: [G-DRS-03]
+- id: C-02
+  call: WES → DRS
+  assume: '`access_url` か `access_id` のどちらかで取れる'
+  spec: 両方とも任意で「少なくとも一方」(DRS-AM-01)
+  verdict: 合う
+  fix: 解決役は `access_id` があれば `/access`、無ければ `access_url` を使う
+  stage: '2'
+  test: INT-AM-BOTH
+  expect: '`access_id` のある方法は `/access` を通り、無い方法は `access_url` をそのまま使う'
+  where: [a56]
+  gaps: [G-DRS-07]
+- id: C-03
+  call: DRS → WES → TES
+  assume: DRS が返す URL を TES にそのまま渡せる
+  spec: DRS の `AccessURL.headers` は任意で、使うと「ヘッダーを付けて取る」。**TES の `tesInput` にはヘッダーの欄が無い**
+  verdict: 合わない
+  fix: yai-drs は TES に渡す用途の URL を**ヘッダーなしの署名付き URL** にする。解決役は `headers` が付いて返ってきたら、その入力を受け付けない(run は `SYSTEM_ERROR`、理由を書く)(G-X-05)
+  stage: '2'
+  test: INT-HEADERS-REJECT
+  expect: '`headers` 付きで返る偽の DRS の入力 → run が SYSTEM_ERROR、TES にタスクが出ない'
+  where: [a08, a10]
+  gaps: [G-X-05, G-TES-05]
+- id: C-04
+  call: WES → TES
+  assume: 入力の URL に https を使える
+  spec: TES は `url` の形を例示するだけ(`s3://`・`gs://`・`file://`)。対応するものは service-info の `storage` で示す
+  verdict: 注意
+  fix: yai-tes は `https`(と `file` の決められた根)を受ける。**`storage` は「一部であり全部とは限らない」(TES 原文)ので、https が載っていなくても拒否しない**。取れるかは設定と実際の取得で確かめる
+  stage: '2'
+  test: INT-TES-STORAGE
+  expect: TES の `storage` に https が無くても取れる相手で E2E-01 が通る
+  where: [a10, a11]
+  gaps: []
+- id: C-05
+  call: WES → TES
+  assume: 入力を取ったあとチェックサムで確かめられる
+  spec: TES の `tesInput` にチェックサムの欄が無い
+  verdict: 合わない
+  fix: 最小版は確かめない(大きさだけ WES が記録)。深める段階で yai-tes の独自の拡張か、executor の前段で確かめる(G-TES-06)
+  stage: '4'
+  test: 後
+  expect: 段階 2 では TES の出力の大きさが DRS の `size` と一致することだけを確かめる。チェックサムは段階 4
+  where: [a10, a11]
+  gaps: [G-TES-06]
+  tests: []
+- id: C-06
+  call: WES → TES
+  assume: タスクの状態を WES の状態に写せる
+  spec: 両方 11 個の同じ集合。ただし WES の `CANCELING` は「止める途中」、TES は「片付け待ち」と説明が違う
+  verdict: 注意
+  fix: 写し方は `docs/data/state-map-tes-to-wes.yaml`。run の状態は全タスクから決める(`wes.md` 4 節)
+  stage: '2'
+  test: INT-STATE-MAP
+  expect: TES の各状態に対して run の状態が `state-map-tes-to-wes.yaml` どおり
+  where: [a13]
+  gaps: [G-WES-06]
+- id: C-07
+  call: WES → TES GetTask
+  assume: ログが返ってくる
+  spec: TES の既定の `view` は `MINIMAL`(id と state だけ)
+  verdict: 注意
+  fix: WES は必ず `view=FULL` を付ける
+  stage: '2'
+  test: INT-VIEW-FULL
+  expect: WES の GetTask 要求に `view=FULL` が付く(試験用の TES で要求を記録)
+  where: [a13]
+  gaps: [G-TES-12]
+- id: C-08
+  call: TES → WES の TaskLog
+  assume: '`stdout`・`stderr` を写せる'
+  spec: TES の `ExecutorLog.stdout` は**中身の文字列**、WES の `Log.stdout` は**取りに行く URL**
+  verdict: 合わない
+  fix: WES が自分の URL(`/ga4gh/wes/v1/runs/{run_id}/tasks/{task_id}/stdout`、yai 独自、WES と同じ AT で取れる、WES-LOG-01)で返す。**TES の stdout は中身・先頭か末尾だけ・URL だけのどれもありうる**(TES 原文)ので、完全さは約束しない。URL だったら中身として配らず、その旨を返す。完全なログが要るなら executor の `stdout` をファイルにして TES の出力として保存させる(G-WES-03)
+  stage: '2'
+  test: INT-LOG-URL
+  expect: TES が中身・切り詰め・URL のどれを返しても、WES の stdout の口が 200 で何かを返し、URL の場合は中身として配らない
+  where: [a13, wes]
+  gaps: [G-WES-03]
+- id: C-09
+  call: TES → WES の TaskLog
+  assume: '`exit_code` は 1 つ'
+  spec: TES は executor ごとに `exit_code`(複数ありうる)
+  verdict: 注意
+  fix: 最小版は 1 タスク 1 executor に限る。深める段階では「最後に動いた executor」を写す
+  stage: '2'
+  test: INT-EXIT-CODE
+  expect: 1 タスク 1 executor の `exit_code` が写る
+  where: [a13]
+  gaps: []
+- id: C-10
+  call: TES → WES
+  assume: 時刻をそのまま写せる
+  spec: TES は RFC 3339(小数・時差つきもありうる)、WES は `%Y-%m-%dT%H:%M:%SZ`
+  verdict: 合わない
+  fix: UTC に直して小数を切り捨てる(D-015)
+  stage: '2'
+  test: INT-TIME-FORMAT
+  expect: 小数・時差つきの TES の時刻が `%Y-%m-%dT%H:%M:%SZ` の UTC になる
+  where: [a13]
+  gaps: [G-X-03]
+- id: C-11
+  call: WES → TES(⑩)
+  assume: 利用者の代わりにタスクを出す
+  spec: TES は「利用者が出してよいか」を実装が決める(TES-AUTH-02)。代理の決まりは無い
+  verdict: 注意
+  fix: サービスの AT(`tes.delegate`)+tags。利用者は読むだけ(7 節)
+  stage: '2'
+  test: INT-TES-DELEGATE, NEG-TAG-SPOOF
+  expect: WES が出したタスクの持ち主は WES、tags に本人。利用者が `yai.` の tags を付けると 400
+  where: [a09, a10]
+  gaps: [G-AAI-08]
+  tests: [INT-TES-DELEGATE, NEG-TAG-SPOOF]
+- id: C-12
+  call: 利用者 → TES(`tes_uri`)
+  assume: WES の `tes_uri` を辿ればタスクが見える
+  spec: '`tes_uri` は任意で、見るための資格情報は決まっていない'
+  verdict: 注意
+  fix: '`yai.on_behalf_of` の本人は AT(`aud=yai-tes`)で読める'
+  stage: '2'
+  test: INT-TES-URI-READ
+  expect: 本人の AT で `tes_uri` が 200、別人は 404
+  where: [a15]
+  gaps: [G-WES-04]
+- id: C-13
+  call: WES ↔ TES のページング
+  assume: 次のページの合図が同じ
+  spec: WES は「空文字で終わり」、TES は書いていない(無いか空か)
+  verdict: 注意
+  fix: yai-tes は終わりで `next_page_token` を**出さない**。yai-wes は TES からの「無い」と「空文字」の両方を終わりと読む(G-X-04)
+  stage: '2'
+  test: INT-PAGING-END
+  expect: TES が token を出さない・空文字・null のどれでも WES の一覧が終わる
+  where: [a13]
+  gaps: [G-X-04]
+- id: C-14
+  call: 利用者 → WES の入力
+  assume: '`drs://` を入力に書ける'
+  spec: WES は「入力の URL を理解して取りに行けること」を求める(WES-RUN-04)。`supported_filesystem_protocols` の語は決まっていない
+  verdict: 注意
+  fix: yai-wes の service-info に `drs`・`https` を載せる
+  stage: '2'
+  test: WES-SI-PROTO
+  expect: WES の service-info に `drs`・`https`
+  where: [a04, wes]
+  gaps: [G-X-01]
+- id: C-15
+  call: WES の解決役 → DRS
+  assume: ホスト名型 URI から URL が作れる
+  spec: 仕様は https・443 固定
+  verdict: 合わない
+  fix: 4 つまとめた試験は TLS の 443。単体は上書き表(G-DRS-01)
+  stage: '2'
+  test: INT-DRS-HOSTNAME
+  expect: TLS の 443 で `drs://drs.yai.test/<id>` が解決できる
+  where: [a56]
+  gaps: [G-DRS-01]
+- id: C-16
+  call: WES の解決役 → DRS
+  assume: compact identifier 型も解決できる
+  spec: 解決には identifiers.org・n2t.net を使う前提
+  verdict: 注意
+  fix: 手元の解決表(G-DRS-02)
+  stage: '2'
+  test: INT-DRS-COMPACT
+  expect: '`drs://yaitest.drs:<id>` が手元の解決表で解決できる'
+  where: [a56]
+  gaps: [G-DRS-02]
+- id: C-17
+  call: DRS(Clearinghouse) ← Passport
+  assume: Passport の `aud` で、自分あての Passport か分かる
+  spec: Passport の `aud` は任意
+  verdict: 注意
+  fix: 試験用 Broker は `aud=["yai-drs"]` を付ける。yai-drs は `aud` が有れば自分を含むことを要求、無ければ受ける(設定で「必須」にできる)(G-AAI-03)
+  stage: '2'
+  test: AAI-AUD
+  expect: '`aud` が別のサービスの Passport は 401、`aud` 無しは設定どおり'
+  where: [a56, ch]
+  gaps: [G-AAI-03]
+- id: C-18
+  call: 利用者 → WES(Passport を預ける)
+  assume: WES に Passport を渡す欄がある
+  spec: '**WES 1.1.0 に無い**(資格情報の受け渡しは対象外)'
+  verdict: 合わない
+  fix: multipart の `yai_passports`(仮 D-009)。`RunRequest` に入れないので `RunLog.request` に出ない。`RunLog.request` には残さない。run が終わったら消す
+  stage: '2'
+  test: NEG-PASSPORT-NOT-LOGGED
+  expect: Passport が `RunLog.request`・DB・ログに無い
+  where: [a04]
+  gaps: [G-WES-01]
+- id: C-19
+  call: WES がPassport を DRS に渡す
+  assume: 渡してよい
+  spec: AAI は「トークンを第三者に広げない」(RFC 6819 5.1.6)を求める
+  verdict: 注意
+  fix: yai-wes と yai-drs を**同じ運用者の 1 つの信頼の範囲**とみなす(D-002)。Passport を TES・エンジン・ログには渡さない
+  stage: '2'
+  test: NEG-PASSPORT-NOT-IN-TES
+  expect: Passport が TES のタスク・ログに無い。許していない DRS に届かない
+  where: [a56]
+  gaps: [G-X-01]
+- id: C-20
+  call: WES → TES の取り消し
+  assume: CancelRun で TES のタスクも止まる
+  spec: TES の CancelTask は空の応答。終わったタスクへの取り消しは未定義
+  verdict: 注意
+  fix: 終わったものへの取り消しは 200 で何もしない(D-020)。WES は `CANCELING` にしてから全タスクに CancelTask、全部が終わったら `CANCELED`
+  stage: '2'
+  test: INT-CANCEL-RACE
+  expect: 終わった run・タスクへの取り消しが 200 で状態が変わらない。取り消し中に新しいタスクが出ない
+  where: [a13, a14]
+  gaps: [G-TES-02, G-WES-07]
+- id: C-21
+  call: DRS の時刻 → 期限の判断
+  assume: Visa の `exp` で判断できる
+  spec: Passport は Option A・B のどちらかを求める
+  verdict: 注意
+  fix: Option B、`accessTokenTTL` = 署名付き URL の期限(5 節)
+  stage: '2'
+  test: AAI-EXP-OPTB
+  expect: Visa の残りが URL の期限+時計のずれ以下のとき URL が出ない(境目の前後 1 秒)
+  where: [ch, a08]
+  gaps: [G-X-02]
+- id: C-22
+  call: service-info 3 つ
+  assume: 同じ service-info 1.0.0 の `Service`
+  spec: 3 つとも v1.0.0 を外部 `$ref`
+  verdict: 合う
+  fix: 共通の部品で作る。`type.version` は各仕様の版(`1.5.0`・`1.1.0`・`1.1.0`)
+  stage: '2'
+  test: SI-ALL
+  expect: 3 つの service-info が service-info 1.0.0 の形に合う
+  where: [drs, tes, wes]
+  gaps: [G-X-06, G-DRS-14]
+- id: C-23
+  call: 誤りの形
+  assume: 3 つで同じ形
+  spec: DRS・WES は `{msg, status_code}`、TES は無し
+  verdict: 注意
+  fix: TES も同じ形(D-011)
+  stage: '2'
+  test: ERR-SHAPE
+  expect: TES の 4xx が `{msg, status_code}`
+  where: [tes]
+  gaps: [G-TES-01]
+- id: C-24
+  call: 一括取得(WES → DRS)
+  assume: 複数の入力を 1 回で解決できる
+  spec: 一括は Passport か「1 つの Bearer」だけ、`maxBulkRequestLength` を超えると 413
+  verdict: 注意
+  fix: 最小版の解決役は 1 件ずつ呼ぶ。一括は DRS 単体の試験で確かめる
+  stage: 1(単体)
+  test: DRS-BULK-*
+  expect: 一括を使わずに E2E-01 が通る(一括は DRS の単体の試験)
+  where: [a56]
+  gaps: [G-DRS-05, G-DRS-06]
+  tests: [DRS-BULK-01, DRS-BULK-02]
+- id: C-25
+  call: WES のステップの間(TES の `file://`)
+  assume: 前のステップの出力を次のステップの入力にできる
+  spec: TES はタスクごとの所属を知らない。WES が出したタスクの持ち主はすべて WES のサービス
+  verdict: 合わない
+  fix: TES の出力の記録に「持ち主・`yai.on_behalf_of`・`yai.run_id`・作ったタスク」を残す。WES のサービスが出すタスクの `file://` の入力は、**同じ `yai.on_behalf_of` かつ同じ `yai.run_id`** の出力だけ。利用者が直接出すタスクは同じ持ち主の出力だけ
+  stage: '2'
+  test: INT-FILE-SAME-RUN
+  expect: 同じ run のステップの間は通る。別の利用者・別の run の出力を指すと 400
+  where: [a10, tes, outstore]
+  gaps: []
+- id: C-26
+  call: WES の解決役 → 公開の DRS
+  assume: DRS の解決にはいつも Passport が要る
+  spec: DRS の取り方は公開(認証なし)もある。相互運用の最初の相手(passport-playground-drs)は Passport の POST を持たない
+  verdict: 注意
+  fix: 先に OPTIONS(か `AccessMethod.authorizations`)を見て、`None` なら **Passport を送らずに** GET で解決する。Passport を送るのは `PassportAuth` のときだけ、かつ「Passport を送ってよい DRS のホスト」の設定に有るとき。外の DRS はホストごとに明示して足す(同じ運用者の範囲という C-19 の理由は外の DRS には使えない)
+  stage: '2'
+  test: INT-DRS-PUBLIC
+  expect: 公開の DRS には Passport が 1 度も届かず、解決できる
+  where: [a56]
+  gaps: [G-DRS-13]
+- id: C-27
+  call: WES → TES(署名付き URL の期限)
+  assume: URL は TES が取るまで有効
+  spec: DRS の `AccessURL` に期限の欄が無い(G-DRS-10)。外の DRS の URL の期限は分からない
+  verdict: 注意
+  fix: yai-drs の URL は 60 分。外の DRS の URL は期限を仮定しない。TES の取得は、401・403 なら再試行せず SYSTEM_ERROR、通信の失敗は 3 回まで(間をあけて)再試行。`Range` での続きの取得も、期限の後は 403 で SYSTEM_ERROR
+  stage: '2'
+  test: E2E-07
+  expect: 期限の後に待ちを解いたタスクは SYSTEM_ERROR、期限の直前に取り始めたものは期限までに終われば COMPLETE
+  where: [a08, a11]
+  gaps: [G-DRS-10]

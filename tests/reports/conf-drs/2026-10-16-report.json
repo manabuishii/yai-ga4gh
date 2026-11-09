@@ -1,0 +1,396 @@
+{
+    "schema_name": "ga4gh-testbed-report",
+    "schema_version": "0.1.0",
+    "testbed_name": "DRS Compliance Suite",
+    "testbed_version": "v0.0.0",
+    "testbed_description": "Test the compliance of a DRS implementation with GA4GH DRS v1.2.0 specification",
+    "platform_name": "yai-drs",
+    "platform_description": "yai (learning project)",
+    "input_parameters": {
+        "server_base_url": "http://127.0.0.1:60245/ga4gh/drs/v1"
+    },
+    "start_time": "2026-10-15T15:26:09Z",
+    "end_time": "2026-10-15T15:26:09Z",
+    "status": "FAIL",
+    "summary": {
+        "unknown": 0,
+        "passed": 21,
+        "warned": 0,
+        "failed": 3,
+        "skipped": 0
+    },
+    "phases": [
+        {
+            "phase_name": "service info",
+            "phase_description": "run all the tests for service_info endpoint",
+            "start_time": "2026-10-15T15:26:09Z",
+            "end_time": "2026-10-15T15:26:09Z",
+            "status": "FAIL",
+            "summary": {
+                "unknown": 0,
+                "passed": 2,
+                "warned": 0,
+                "failed": 1,
+                "skipped": 0
+            },
+            "tests": [
+                {
+                    "test_name": "Run test cases on the service-info endpoint; auth_type = none",
+                    "test_description": "validate service-info status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "FAIL",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 2,
+                        "warned": 0,
+                        "failed": 1,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "Service Info response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "Service Info response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "Service Info response schema validation",
+                            "case_description": "Validate Service Info response schema when status = 200",
+                            "log_messages": [
+                                "Stack Trace: Additional properties are not allowed ('drs', 'maxBulkRequestLength' were unexpected)\n\nFailed validating 'additionalProperties' in schema:\n    {'additionalProperties': False,\n     'properties': {'contactUrl': {'description': 'URL of the contact for '\n                                                  'the provider of this '\n                                                  'service, e.g. a link to '\n                                                  'a contact form (RFC '\n                                                  '3986 format), or an '\n                                                  'email (RFC 2368 '\n                                                  'format).',\n                                   'format': 'uri',\n                                   'type': 'string'},\n                    'createdAt': {'description': 'Timestamp describing '\n                                                 'when the service was '\n                                                 'first deployed and '\n                                                 'available (RFC 3339 '\n                                                 'format)',\n                                  'format': 'date-time',\n                                  'type': 'string'},\n                    'description': {'description': 'Description of the '\n                                                   'service. Should be '\n                                                   'human readable and '\n                                                   'provide information '\n                                                   'about the service.',\n                                    'type': 'string'},\n                    'documentationUrl': {'description': 'URL of the '\n                                                        'documentation of '\n                                                        'this service (RFC '\n                                                        '3986 format). '\n                                                        'This should help '\n                                                        'someone learn how '\n                                                        'to use your '\n                                                        'service, '\n                                                        'including any '\n                                                        'specifics '\n                                                        'required to '\n                                                        'access data, e.g. '\n                                                        'authentication.',\n                                         'format': 'uri',\n                                         'type': 'string'},\n                    'environment': {'description': 'Environment the '\n                                                   'service is running in. '\n                                                   'Use this to '\n                                                   'distinguish between '\n                                                   'production, '\n                                                   'development and '\n                                                   'testing/staging '\n                                                   'deployments. Suggested '\n                                                   'values are prod, test, '\n                                                   'dev, staging. However '\n                                                   'this is advised and '\n                                                   'not enforced.',\n                                    'type': 'string'},\n                    'id': {'description': 'Unique ID of this service. '\n                                          'Reverse domain name notation is '\n                                          'recommended, though not '\n                                          'required. The identifier should '\n                                          'attempt to be globally unique '\n                                          'so it can be used in downstream '\n                                          'aggregator services e.g. '\n                                          'Service Registry.',\n                           'type': 'string'},\n                    'name': {'description': 'Name of this service. Should '\n                                            'be human readable.',\n                             'type': 'string'},\n                    'organization': {'description': 'Organization '\n                                                    'providing the service',\n                                     'properties': {'name': {'description': 'Name '\n                                                                            'of '\n                                                                            'the '\n                                                                            'organization '\n                                                                            'responsible '\n                                                                            'for '\n                                                                            'the '\n                                                                            'service',\n                                                             'type': 'string'},\n                                                    'url': {'description': 'URL '\n                                                                           'of '\n                                                                           'the '\n                                                                           'website '\n                                                                           'of '\n                                                                           'the '\n                                                                           'organization '\n                                                                           '(RFC '\n                                                                           '3986 '\n                                                                           'format)',\n                                                            'format': 'uri',\n                                                            'type': 'string'}},\n                                     'required': ['name', 'url'],\n                                     'type': 'object'},\n                    'type': {'$ref': 'service_type.json#/definitions/service_type'},\n                    'updatedAt': {'description': 'Timestamp describing '\n                                                 'when the service was '\n                                                 'last updated (RFC 3339 '\n                                                 'format)',\n                                  'format': 'date-time',\n                                  'type': 'string'},\n                    'version': {'description': 'Version of the service '\n                                               'being described. Semantic '\n                                               'versioning is recommended, '\n                                               'but other identifiers, '\n                                               'such as dates or commit '\n                                               'hashes, are also allowed. '\n                                               'The version should be '\n                                               'changed whenever the '\n                                               'service is updated.',\n                                'type': 'string'}},\n     'required': ['id', 'name', 'type', 'organization', 'version'],\n     'type': 'object'}\n\nOn instance:\n    {'description': 'yai の drs の学習用の実装',\n     'drs': {'maxBulkRequestLength': 100,\n             'objectCount': 3,\n             'totalObjectSize': 31},\n     'environment': 'test',\n     'id': 'test.yai.drs',\n     'maxBulkRequestLength': 100,\n     'name': 'yai-drs',\n     'organization': {'name': 'yai (personal learning project)',\n                      'url': 'https://yai.test/'},\n     'type': {'artifact': 'drs', 'group': 'org.ga4gh', 'version': '1.5.0'},\n     'version': '0.1.0'}"
+                            ],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "FAIL",
+                            "message": "Additional properties are not allowed ('drs', 'maxBulkRequestLength' were unexpected)"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "phase_name": "drs object info",
+            "phase_description": "run all the tests for drs object info endpoint",
+            "start_time": "2026-10-15T15:26:09Z",
+            "end_time": "2026-10-15T15:26:09Z",
+            "status": "FAIL",
+            "summary": {
+                "unknown": 0,
+                "passed": 13,
+                "warned": 0,
+                "failed": 2,
+                "skipped": 0
+            },
+            "tests": [
+                {
+                    "test_name": "Run test cases on the drs object info endpoint for drs id = o01m502qc6bpne2ce1q12850031; auth_type = none",
+                    "test_description": "validate drs object status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "PASS",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 5,
+                        "warned": 0,
+                        "failed": 0,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "DRS Object Info response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "DRS Object Info response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "DRS Object Info response schema validation",
+                            "case_description": "Validate DRS Object Info response schema when status = 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Schema Validation Successful"
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that DRS Object Info response has access_methods field provided and that it is non-empty",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "'access_methods' is provided and it is non-empty."
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that each access_method in the access_methods field of the DRS Object Info response has atleast one of 'access_url'or 'access_id' provided",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "At least 'access_url' or 'access_id' is provided in all access_methods"
+                        }
+                    ]
+                },
+                {
+                    "test_name": "Run test cases on the drs object info endpoint for drs id = o01m502qcjn8xn7s9e2tsy2tvt3; auth_type = bearer",
+                    "test_description": "validate drs object status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "FAIL",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 4,
+                        "warned": 0,
+                        "failed": 1,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "DRS Object Info response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "DRS Object Info response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "DRS Object Info response schema validation",
+                            "case_description": "Validate DRS Object Info response schema when status = 200",
+                            "log_messages": [
+                                "Stack Trace: Additional properties are not allowed ('authorizations' was unexpected)\n\nFailed validating 'additionalProperties' in schema['properties']['access_methods']['items']:\n    {'additionalProperties': False,\n     'properties': {'access_id': {'description': 'An arbitrary string to '\n                                                 'be passed to the '\n                                                 '`/access` method to get '\n                                                 'an `AccessURL`. This '\n                                                 'string must be unique '\n                                                 'within the scope of a '\n                                                 'single object. Note that '\n                                                 'at least one of '\n                                                 '`access_url` and '\n                                                 '`access_id` must be '\n                                                 'provided.',\n                                  'type': 'string'},\n                    'access_url': {'$ref': 'access_url.json#/definitions/access_url',\n                                   'description': 'An `AccessURL` that can '\n                                                  'be used to fetch the '\n                                                  'actual object bytes. '\n                                                  'Note that at least one '\n                                                  'of `access_url` and '\n                                                  '`access_id` must be '\n                                                  'provided.'},\n                    'region': {'description': 'Name of the region in the '\n                                              'cloud service provider that '\n                                              'the object belongs to.',\n                               'type': 'string'},\n                    'type': {'description': 'Type of the access method.',\n                             'enum': ['s3',\n                                      'gs',\n                                      'ftp',\n                                      'gsiftp',\n                                      'globus',\n                                      'htsget',\n                                      'https',\n                                      'file'],\n                             'type': 'string'}},\n     'required': ['type'],\n     'type': 'object'}\n\nOn instance['access_methods'][0]:\n    {'access_id': 'a1',\n     'authorizations': {'bearer_auth_issuers': ['http://127.0.0.1:49591/'],\n                        'drs_object_id': 'o01m502qcjn8xn7s9e2tsy2tvt3',\n                        'supported_types': ['BearerAuth']},\n     'type': 'https'}"
+                            ],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "FAIL",
+                            "message": "Additional properties are not allowed ('authorizations' was unexpected)"
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that DRS Object Info response has access_methods field provided and that it is non-empty",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "'access_methods' is provided and it is non-empty."
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that each access_method in the access_methods field of the DRS Object Info response has atleast one of 'access_url'or 'access_id' provided",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "At least 'access_url' or 'access_id' is provided in all access_methods"
+                        }
+                    ]
+                },
+                {
+                    "test_name": "Run test cases on the drs object info endpoint for drs id = o01m502qd22gcatyv3kxyds00qw; auth_type = passport",
+                    "test_description": "validate drs object status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "FAIL",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 4,
+                        "warned": 0,
+                        "failed": 1,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "DRS Object Info response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "DRS Object Info response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "DRS Object Info response schema validation",
+                            "case_description": "Validate DRS Object Info response schema when status = 200",
+                            "log_messages": [
+                                "Stack Trace: Additional properties are not allowed ('authorizations' was unexpected)\n\nFailed validating 'additionalProperties' in schema['properties']['access_methods']['items']:\n    {'additionalProperties': False,\n     'properties': {'access_id': {'description': 'An arbitrary string to '\n                                                 'be passed to the '\n                                                 '`/access` method to get '\n                                                 'an `AccessURL`. This '\n                                                 'string must be unique '\n                                                 'within the scope of a '\n                                                 'single object. Note that '\n                                                 'at least one of '\n                                                 '`access_url` and '\n                                                 '`access_id` must be '\n                                                 'provided.',\n                                  'type': 'string'},\n                    'access_url': {'$ref': 'access_url.json#/definitions/access_url',\n                                   'description': 'An `AccessURL` that can '\n                                                  'be used to fetch the '\n                                                  'actual object bytes. '\n                                                  'Note that at least one '\n                                                  'of `access_url` and '\n                                                  '`access_id` must be '\n                                                  'provided.'},\n                    'region': {'description': 'Name of the region in the '\n                                              'cloud service provider that '\n                                              'the object belongs to.',\n                               'type': 'string'},\n                    'type': {'description': 'Type of the access method.',\n                             'enum': ['s3',\n                                      'gs',\n                                      'ftp',\n                                      'gsiftp',\n                                      'globus',\n                                      'htsget',\n                                      'https',\n                                      'file'],\n                             'type': 'string'}},\n     'required': ['type'],\n     'type': 'object'}\n\nOn instance['access_methods'][0]:\n    {'access_id': 'a1',\n     'authorizations': {'drs_object_id': 'o01m502qd22gcatyv3kxyds00qw',\n                        'passport_auth_issuers': ['http://127.0.0.1:49591/visa/'],\n                        'supported_types': ['PassportAuth']},\n     'type': 'https'}"
+                            ],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "FAIL",
+                            "message": "Additional properties are not allowed ('authorizations' was unexpected)"
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that DRS Object Info response has access_methods field provided and that it is non-empty",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "'access_methods' is provided and it is non-empty."
+                        },
+                        {
+                            "case_name": "DRS Object Info has access information",
+                            "case_description": "Validate that each access_method in the access_methods field of the DRS Object Info response has atleast one of 'access_url'or 'access_id' provided",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "At least 'access_url' or 'access_id' is provided in all access_methods"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "phase_name": "drs object access",
+            "phase_description": "run all the tests for drs access endpoint",
+            "start_time": "2026-10-15T15:26:09Z",
+            "end_time": "2026-10-15T15:26:09Z",
+            "status": "PASS",
+            "summary": {
+                "unknown": 0,
+                "passed": 6,
+                "warned": 0,
+                "failed": 0,
+                "skipped": 0
+            },
+            "tests": [
+                {
+                    "test_name": "Run test cases on the drs access endpoint for drs id = o01m502qcjn8xn7s9e2tsy2tvt3 and access id = a1; auth_type = bearer",
+                    "test_description": "validate drs access status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "PASS",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 3,
+                        "warned": 0,
+                        "failed": 0,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "DRS Access response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "DRS Access response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "DRS Access response schema validation",
+                            "case_description": "Validate DRS Access response schema when status = 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Schema Validation Successful"
+                        }
+                    ]
+                },
+                {
+                    "test_name": "Run test cases on the drs access endpoint for drs id = o01m502qd22gcatyv3kxyds00qw and access id = a1; auth_type = passport",
+                    "test_description": "validate drs access status code, content-type and response schemas",
+                    "start_time": "2026-10-15T15:26:09Z",
+                    "end_time": "2026-10-15T15:26:09Z",
+                    "status": "PASS",
+                    "summary": {
+                        "unknown": 0,
+                        "passed": 3,
+                        "warned": 0,
+                        "failed": 0,
+                        "skipped": 0
+                    },
+                    "message": "",
+                    "cases": [
+                        {
+                            "case_name": "DRS Access response status code validation",
+                            "case_description": "Check if the response status code is 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Response status code is 200"
+                        },
+                        {
+                            "case_name": "DRS Access response content-type validation",
+                            "case_description": "Check if the content-type is application/json",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Content-Type matches expected type"
+                        },
+                        {
+                            "case_name": "DRS Access response schema validation",
+                            "case_description": "Validate DRS Access response schema when status = 200",
+                            "log_messages": [],
+                            "start_time": "2026-10-15T15:26:09Z",
+                            "end_time": "2026-10-15T15:26:09Z",
+                            "status": "PASS",
+                            "message": "Schema Validation Successful"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

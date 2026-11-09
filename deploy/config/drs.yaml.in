@@ -1,0 +1,20 @@
+# yai-drs (combined tests). Resolves hostname-based DRS URIs over https on 443 as the spec says (D-017)
+data_dir: /yai/var/drs
+public_base_url: https://drs.yai.test
+hostname: drs.yai.test
+max_bulk_request_length: 100
+signed_url_ttl_seconds: 3600
+url_secret_file: /yai/var/drs/url-secret
+test_endpoints: false           # the test clock (/yai/test/clock) is for local tests only (D-054)
+auth:
+  mode: aai
+  issuer: https://aai.yai.test/
+  jwks_uri: https://aai.yai.test/.well-known/jwks.json
+  audience: yai-drs
+trust:
+  brokers:
+    - {iss: "https://aai.yai.test/", jwks_uri: "https://aai.yai.test/.well-known/jwks.json"}
+  visa_issuers:
+    - {iss: "https://aai.yai.test/visa/", jku_allow: ["https://aai.yai.test/visa/jwks.json"]}
+  trusted_sources: [https://yai.test/dac]
+  accepted_by: [dac]

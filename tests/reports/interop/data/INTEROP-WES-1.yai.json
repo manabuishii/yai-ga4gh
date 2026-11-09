@@ -1,0 +1,97 @@
+{
+ "pair": "INTEROP-WES-1",
+ "partner": "yai-wes (compose)",
+ "started": "2026-10-17T06:36:56Z",
+ "steps": [
+  {
+   "name": "GET /service-info が 200 で WES 1.1.0 の ServiceInfo の鍵を持つ",
+   "ok": true,
+   "status": 200,
+   "missing": [],
+   "supported_wes_versions": [
+    "1.1.0"
+   ],
+   "workflow_engine_versions": {
+    "yai-mini": {
+     "workflow_engine_version": [
+      "0.1.0"
+     ]
+    }
+   },
+   "default_workflow_engine_parameters_type": "list"
+  },
+  {
+   "name": "POST /runs(multipart、CWL と入力を添付)が 200 で run_id",
+   "ok": true,
+   "status": 200,
+   "body": "{\"run_id\":\"r01m5497v1mnma6tmb282nby6r6\"}"
+  },
+  {
+   "name": "GET /runs/{id}/status が終わりの状態(COMPLETE)まで動く",
+   "ok": true,
+   "state": "COMPLETE"
+  },
+  {
+   "name": "GET /runs/{id} が RunLog(run_id・request・state・run_log・outputs)",
+   "ok": true,
+   "keys": [
+    "outputs",
+    "request",
+    "run_id",
+    "run_log",
+    "state",
+    "task_logs_url"
+   ],
+   "outputs_type": "dict",
+   "outputs": "{\"out\": {\"class\": \"File\", \"location\": \"file:///yai/var/tes/files/wes/r01m5497v1mnma6tmb282nby6r6/1/out/copy.txt\", \"size\": 18}}",
+   "run_log_keys": [
+    "end_time",
+    "name",
+    "start_time",
+    "system_logs"
+   ],
+   "stdout_form": "other",
+   "stdout": "null",
+   "system_logs": "[]"
+  },
+  {
+   "name": "出力 copy.txt の中身(WES 1.1.0 の形 outputs は辞書。中身は file:// なので E2E で確認)",
+   "ok": true,
+   "location": "{\"class\": \"File\", \"location\": \"file:///yai/var/tes/files/wes/r01m5497v1mnma6tmb282nby6r6/1/out/copy.txt\", \"size\": 18}"
+  },
+  {
+   "name": "GET /runs?page_size=1 が RunListResponse(runs は 1 件)",
+   "ok": true,
+   "status": 200,
+   "n": 1,
+   "next_page_token": "eyJzbmFwc2hvdF9zZXEiOiAyNSwgImFmdGVyX3NlcSI6IDI1LCAicHJpbmNpcGFsIjogImFhNDQ0M2I5MWZhMzI1YTEiLCAic2NvcGUiOiAid2VzLnJ1bnMiLCAiZmlsdGVyc19oYXNoIjogIjQ0MTM2ZmEzNTViMzY3OGEifQ.de777112d38a6cc3cbbdb3a425338128"
+  },
+  {
+   "name": "GET /runs/{id}/tasks(WES 1.1.0 で定義)",
+   "ok": true,
+   "status": 200,
+   "body": "{\"task_logs\":[{\"id\":\"r01m5497v1mnma6tmb282nby6r6.1\",\"name\":\"cat-file\",\"cmd\":[\"cat\",\"/yai/inputs/infile/input.txt\"],\"system_logs\":[\"state=COMPLETE\"],\"start_time\":\"2026-10-17T06:36:56Z\",\"end_time\":\"2026-10-17T06:36:56Z\",\"exit_code\":0,\"tes_uri\":\"https://tes.yai.test/ga4gh/tes/v1/tasks/t01m5497v3b1ap3dxj7e2c31b9p\",\"stdout\":\"https://wes.yai.test/ga4gh/wes/v1/runs/r01m5497v1mnma6tmb282nby6r6/tasks/r01m5497v1mnma6tmb282nby6r6.1/stdout\",\"stderr\":\"https://wes.yai.test/ga4gh/wes/v1/runs/r01m5497v1mnma6tmb282nby6r6/tasks/r01m5497v1mnma6tmb282nby6r6.1/stderr\"}],\"next_page_token\":\"\"}"
+  },
+  {
+   "name": "POST /runs/{id}/cancel → CANCELED",
+   "ok": true,
+   "cancel_status": 200,
+   "state": "CANCELED"
+  },
+  {
+   "name": "GET /runs/{無い id、UUID の形} が 404 で ErrorResponse {msg, status_code}",
+   "ok": true,
+   "status": 404,
+   "body": "{\"msg\":\"run not found\",\"status_code\":404}"
+  },
+  {
+   "name": "GET /runs/{無い id} が 404 で ErrorResponse {msg, status_code}",
+   "ok": true,
+   "status": 404,
+   "body": "{\"msg\":\"run not found\",\"status_code\":404}"
+  }
+ ],
+ "finished": "2026-10-17T06:37:06Z",
+ "passed": 10,
+ "failed": 0
+}

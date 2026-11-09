@@ -1,0 +1,81 @@
+{
+ "pair": "INTEROP-AAI-1",
+ "partner": "Passport Playground (Hydra v26.2.0 broker + issuer bfb0232) → yai-drs clearinghouse",
+ "started": "2026-10-17T06:37:13Z",
+ "steps": [
+  {
+   "name": "Hydra の admin API でクライアントを作る(scope ga4gh_passport_v1・audience yai-drs)",
+   "ok": true,
+   "status": 201,
+   "body": "{\"client_id\": \"79a6d4cf-a6bb-4ef1-a29b-21709f01ce33\", \"client_name\": \"yai-interop\", \"redirect_uris\": null, \"grant_types\": [\"client_credentials\"], \"response_types\": [], \"scope\": \"ga4gh_passport_v1\", \"audience\": [\"yai-drs\"], \"owner\": \"\", \"policy_uri\": \"\", \"allowed_cors_origins\": [], \"tos_uri\": \"\", \"client_uri\": \"\", \"logo_uri\": \"\", \"contacts\": null, \"client_secret_expires_at\": 0, \"subject_type\": \"public\", \"jwks\": {}, \"token_endpoint_auth_method\": \"client_secret_post\", \"userinfo_signed_response_alg\": \"none\", \"created_at\": \"2026-10-17T06:37:13Z\", \"updated_at\": \"2026-10-17T06:37:13.108686Z\", \"metada…"
+  },
+  {
+   "name": "Broker(https://broker.yai.test、手元の CA)から AT を取る",
+   "ok": true,
+   "status": 200,
+   "body": "{\"expires_in\": 3599, \"scope\": \"ga4gh_passport_v1\", \"token_type\": \"bearer\"}"
+  },
+  {
+   "name": "AT は JWT。typ・iss・aud・scp・ga4gh_passport_v1 の有無を記録",
+   "ok": true,
+   "header": {
+    "alg": "RS256",
+    "kid": "06e495a9-22a9-411c-97cc-41a28386a189",
+    "typ": "JWT"
+   },
+   "claims": {
+    "iss": "https://broker.yai.test/",
+    "aud": [
+     "yai-drs"
+    ],
+    "sub": "79a6d4cf-a6bb-4ef1-a29b-21709f01ce33",
+    "scp": [
+     "ga4gh_passport_v1"
+    ],
+    "scope": null,
+    "client_id": "79a6d4cf-a6bb-4ef1-a29b-21709f01ce33"
+   },
+   "has_ga4gh_passport_v1": false
+  },
+  {
+   "name": "Broker の JWKS(yai-drs が trust.brokers から取る先)が取れる",
+   "ok": true,
+   "status": 200,
+   "kids": [
+    "d1944f6c-cb41-4a6b-a922-26c60735addd",
+    "06e495a9-22a9-411c-97cc-41a28386a189"
+   ]
+  },
+  {
+   "name": "yai-drs に Hydra の AT を Passport として送る(POST /objects/{id})→ yai の判定",
+   "ok": true,
+   "status": 401,
+   "body": "{\"msg\":\"invalid passport\",\"status_code\":401}"
+  },
+  {
+   "name": "yai-drs に Hydra の AT を Bearer で送る → yai の判定",
+   "ok": true,
+   "status": 401,
+   "body": "{\"msg\":\"invalid access token\",\"status_code\":401}"
+  },
+  {
+   "name": "Issuer の Visa の形(Passport の仕様は署名付き JWT の文字列。相手は?)",
+   "ok": true,
+   "status": 200,
+   "n_visas": 4,
+   "visa_value_types": [
+    "dict"
+   ],
+   "first": "{\"exp\": 1792222633, \"ga4gh_visa_v1\": {\"asserted\": 1792219033, \"by\": \"dac\", \"source\": \"https://duos.org\", \"type\": \"ApprovedUsers\", \"value\": \"https://consent.dsde-prod.broadinstitute.org/api/datataset/DUOS-000001/approvedUsers\"}, \"iat\": 1792219033, \"iss\": \"https://duos.org\", \"sub\": \"DUOS-000001\"}"
+  },
+  {
+   "name": "Issuer の JSON をそのまま Passport として yai-drs に送る → yai の判定",
+   "ok": true,
+   "status": 401,
+   "body": "{\"msg\":\"invalid passport\",\"status_code\":401}"
+  }
+ ],
+ "finished": "2026-10-17T06:37:13Z",
+ "passed": 8,
+ "failed": 0
+}

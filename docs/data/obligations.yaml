@@ -1,0 +1,237 @@
+# 仕様の義務の表の原本。docs/spec-obligations.md はここから tools/gen_obligations.py で作る(手で直さない)。
+# at: [ファイル(specs/ からの相対), 原文の一部] の並び。行番号は道具が原文を探して求める(見つからなければ失敗)。
+# min: ◯=最小版で満たして試す / △=最小版では一部 / 後=あとで深める / 外=対象外 / 決=仕様に定めが無く yai が決める
+# place: 本文=OpenAPI の形の検査では見えない / 形=schema で検査できる
+# gap: docs/spec-gaps.md の番号
+drs:
+  - {id: DRS-ID-01, target: ID, duty: "ID は [A-Za-z0-9.-_~]。ほかの文字は API で使うとき percent-encode", strength: MUST, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "DRS IDs can contain other characters, but they MUST be encoded"]]}
+  - {id: DRS-ID-02, target: ID, duty: 1 つの DRS ID は常に同じデータを返す, strength: MUST, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "One DRS ID MUST always return the same object data"]]}
+  - {id: DRS-ID-03, target: ID, duty: 版の概念(最新版の取得・版の一覧)は無い, strength: 定義, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "DRS version 1.x does NOT support semantics around multiple versions"]]}
+  - {id: DRS-URI-01, target: クライアント, duty: ホスト名型と compact identifier 型の両方を解決できる, strength: MUST, place: 本文, min: △, gap: "G-DRS-01, G-DRS-02",
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "DRS clients MUST support resolving both styles"]]}
+  - {id: DRS-URI-02, target: クライアント, duty: ホスト名型は https・443 固定。ポートを含むのは不正, strength: 定義, place: 本文, min: △, gap: G-DRS-01,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "The protocol is always https and the port is always the standard 443"]]}
+  - {id: DRS-URI-03, target: クライアント, duty: "ホスト名型の ID は percent-encode 済みで「:」を含まない", strength: 定義, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/HostnameBasedURIs.md, "the ID is always percent-encoded"]]}
+  - {id: DRS-URI-04, target: クライアント, duty: "compact 型は最初の「:」で prefix と accession に分け、accession は percent-encode して DRS ID に使う", strength: must, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "using the first occurrence of a colon"], [drs/openapi/tags/CompactIdentifierBasedURIs.md, "you *must* percent encode the accessions"]]}
+  - {id: DRS-URI-05, target: クライアント, duty: URL パターンを 24 時間めやすでキャッシュする, strength: SHOULD, place: 本文, min: 後,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "DRS clients SHOULD cache the URL pattern"]]}
+  - {id: DRS-URI-06, target: サーバー, duty: 自前の compact identifier を出すなら identifiers.org に prefix を登録する, strength: MUST, place: 本文, min: 外, gap: G-DRS-02,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "you MUST first register a new prefix with identifiers.org"]]}
+  - {id: DRS-SI-01, target: service-info, duty: "type.group=org.ga4gh、type.artifact=drs", strength: MUST, place: 本文, min: ◯,
+     at: [["drs/openapi/paths/service-info.yaml", "a DRS service MUST have:"]]}
+  - {id: DRS-SI-02, target: service-info, duty: maxBulkRequestLength を根(非推奨)と drs の下の両方に出す, strength: required, place: 形, min: ◯, gap: G-DRS-06,
+     at: [[drs/openapi/components/schemas/DrsService.yaml, "  - maxBulkRequestLength"], [drs/openapi/components/schemas/DrsService.yaml, "DEPRECATED - In 2.0 this will move"]]}
+  - {id: DRS-SI-03, target: service-info, duty: "service-info 1.0.0 の必須(id・name・type・organization・version)", strength: required, place: 形, min: ◯,
+     at: [[service-info/service-info.yaml, "        - organization"]]}
+  - {id: DRS-OBJ-01, target: GetObject, duty: "id・self_uri・size・created_time・checksums が必須。checksums は 1 つ以上", strength: required, place: 形, min: ◯,
+     at: [[drs/openapi/components/schemas/DrsObject.yaml, "  - self_uri"], [drs/openapi/components/schemas/DrsObject.yaml, "At least one checksum must be provided."]]}
+  - {id: DRS-OBJ-02, target: GetObject, duty: blob では access_methods が要る, strength: 本文の Required, place: 本文, min: ◯, gap: G-DRS-07,
+     at: [[drs/openapi/components/schemas/DrsObject.yaml, "Required for single blobs; optional for bundles."]]}
+  - {id: DRS-OBJ-03, target: GetObject, duty: self_uri はホスト名型の drs://, strength: 定義, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/DrsObject.yaml, "A drs:// hostname-based URI"]]}
+  - {id: DRS-OBJ-04, target: GetObject, duty: created_time・updated_time は RFC 3339 で、中身の時刻(JSON の作成時刻ではない), strength: 定義, place: 本文, min: △, gap: G-X-03,
+     at: [[drs/openapi/components/schemas/DrsObject.yaml, "Timestamp of content creation in RFC3339."]]}
+  - {id: DRS-OBJ-05, target: GetObject, duty: "チェックサムの type は IANA の Hash Name String(例 sha-256)", strength: SHOULD, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/Checksum.yaml, "SHOULD be listed as `Hash Name String`"]]}
+  - {id: DRS-OBJ-06, target: GetObject, duty: 無い ID は 404(Error の形), strength: 応答の定義, place: 形, min: ◯,
+     at: [["drs/openapi/paths/objects@{object_id}.yaml", "404NotFoundDrsObject.yaml"]]}
+  - {id: DRS-AM-01, target: AccessMethod, duty: access_url と access_id の少なくとも一方, strength: must, place: 本文, min: ◯, gap: G-DRS-07,
+     at: [[drs/openapi/components/schemas/AccessMethod.yaml, "Note that at least one of `access_url` and `access_id` must be provided."]]}
+  - {id: DRS-AM-02, target: AccessMethod, duty: access_id は 1 つのオブジェクトの中で一意, strength: must, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/AccessMethod.yaml, "This string must be unique within the scope of a single object."]]}
+  - {id: DRS-AM-03, target: AccessMethod, duty: access_id があるとき /access の認証のしかたを authorizations で示す, strength: 定義, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/AccessMethod.yaml, "When `access_id` is provided, `authorizations` provides"]]}
+  - {id: DRS-ACC-01, target: GetAccessURL, duty: 返す AccessURL は url 必須。headers は任意, strength: required, place: 形, min: ◯, gap: G-X-05,
+     at: [[drs/openapi/components/schemas/AccessURL.yaml, "  - url"]]}
+  - {id: DRS-ACC-02, target: GetAccessURL, duty: "access_id はオブジェクトの中でだけ一意なので、別のオブジェクトの access_id は 404(仕様の帰結)", strength: 帰結, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/AccessMethod.yaml, "This string must be unique within the scope of a single object."]]}
+  - {id: DRS-AUTH-01, target: 全体, duty: 誰が何をできるかの方針は実装が決めて執行する, strength: 責任, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/Auth.md, "The DRS implementation is responsible for defining and enforcing an authorization policy"]]}
+  - {id: DRS-AUTH-02, target: 全体, duty: オブジェクトごと、またメタデータと /access で認証方式が違ってよい。OPTIONS で示す, strength: should, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/Auth.md, "The authorization mode may vary between DRS objects hosted by a service."]]}
+  - {id: DRS-AUTH-03, target: PostObject・PostAccessURL・一括, duty: Passport は POST の本文 passports(配列)で渡す, strength: 形, place: 形, min: ◯, gap: G-DRS-03,
+     at: [[drs/openapi/components/requestBodies/Passports.yaml, "passports:"], [drs/openapi/components/requestBodies/PostObjectBody.yaml, "passports:"], [drs/openapi/tags/Auth.md, "tokens[]"]]}
+  - {id: DRS-AUTH-04, target: OptionsObject, duty: Authorizations を返す。対応しないなら 204 か 405, strength: 応答の定義, place: 形, min: ◯,
+     at: [[drs/openapi/components/responses/AuthorizationsNotSupported.yaml, "are not supported for this object"]]}
+  - {id: DRS-AUTH-05, target: Authorizations, duty: PassportAuth を含むなら passport_auth_issuers は必須(本文だけ), strength: required(本文), place: 本文, min: ◯, gap: G-DRS-08,
+     at: [[drs/openapi/components/schemas/Authorizations.yaml, "If authorizations contain `PassportAuth` this is a required list"]]}
+  - {id: DRS-AUTH-07, target: クライアント(yai-wes の解決役), duty: Passport を出すなら、passport_auth_issuers の一覧にある Visa を含む Passport だけを出す。送ってよい DRS かを確かめる, strength: must / strongly recommended, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/Authorizations.yaml, "only provide passports that contain visas from this list"]]}
+  - {id: DRS-AUTH-06, target: 全体, duty: 認証なし・Basic・Bearer・Passport の 4 方式, strength: 定義, place: 形, min: △,
+     at: [[drs/openapi/data_repository_service.openapi.yaml, "  - BasicAuth: []"], [drs/openapi/data_repository_service.openapi.yaml, "    PassportAuth:"]]}
+  - {id: DRS-BULK-01, target: 一括, duty: 配列が maxBulkRequestLength を超えたら 413, strength: 本文, place: 本文, min: ◯,
+     at: [[drs/openapi/components/schemas/DrsService.yaml, "can handle (>= 1) before generating a 413 error"]]}
+  - {id: DRS-BULK-02, target: 一括, duty: 解決できない ID は unresolved_drs_objects に入れ summary で数える, strength: 応答の定義, place: 形, min: ◯, gap: G-DRS-09,
+     at: [[drs/openapi/components/responses/200OkDrsObjects.yaml, "unresolved_drs_objects:"]]}
+  - {id: DRS-202-01, target: 全体, duty: 202 を返すなら Retry-After は整数の秒, strength: must, place: 本文, min: 外,
+     at: [[drs/openapi/components/responses/202Accepted.yaml, "this must be an integral relative time in seconds"]]}
+  - {id: DRS-RO-01, target: 全体, duty: DRS v1 は読み取り専用。登録・更新は実装が独自に持つ, strength: 定義, place: 本文, min: ◯,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "DRS v1 is a read-only API."]]}
+  - {id: DRS-BUN-01, target: 全体, duty: バンドルは 1.3 から非推奨, strength: 定義, place: 本文, min: 外,
+     at: [[drs/openapi/tags/DrsApiPrinciples.md, "As of v1.3, bundles have been deprecated"]]}
+  - {id: DRS-SEC-01, target: 全体, duty: 取りに行ける先を絞り、悪用をログで見つけられるようにする, strength: should, place: 本文, min: △,
+     at: [[drs/openapi/tags/Auth.md, "DRS implementers should ensure their solutions restrict access"]]}
+tes:
+  - {id: TES-AUTH-01, target: 全体, duty: 認証の要否は実装が決める。使うなら OAuth2 Bearer を推奨, strength: recommend, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "we recommend that TES implementations use an OAuth2"]]}
+  - {id: TES-AUTH-02, target: 全体, duty: 利用者がタスクを出してよいかを確かめるのは実装の責任, strength: 責任, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "Checking that a user is authorized to submit TES requests"]]}
+  - {id: TES-CORS-01, target: 全体, duty: 別のサイトから使わせるなら CORS, strength: must, place: 本文, min: 外,
+     at: [[tes/task_execution_service.openapi.yaml, "it must implement Cross Origin Resource Sharing"]]}
+  - {id: TES-SI-01, target: service-info, duty: "type.artifact=tes。storage・tesResources_backend_parameters を返す", strength: required(artifact), place: 形, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "enum: [tes]"], [tes/task_execution_service.openapi.yaml, "tesResources_backend_parameters:"]]}
+  - {id: TES-CRT-01, target: CreateTask, duty: executors 必須。各 executor は image・command 必須, strength: required, place: 形, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "      - executors"], [tes/task_execution_service.openapi.yaml, "      - command"]]}
+  - {id: TES-CRT-02, target: CreateTask, duty: 応答は id(サーバーが付ける), strength: required, place: 形, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "    tesCreateTaskResponse:"]]}
+  - {id: TES-CRT-03, target: CreateTask, duty: stdin・stdout・stderr・入出力の path は絶対パス, strength: must, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "This must be an absolute path."], [tes/task_execution_service.openapi.yaml, "Must be an absolute path"]]}
+  - {id: TES-CRT-04, target: CreateTask, duty: tesInput.url は content が無いとき必須。content があれば url は無視, strength: REQUIRED / must, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "REQUIRED, unless \"content\" is set."], [tes/task_execution_service.openapi.yaml, "If content is not empty, \"url\" must be ignored."]]}
+  - {id: TES-CRT-05, target: CreateTask, duty: content は少なくとも 128 KiB を受ける, strength: should, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "Implementations should support a minimum of 128 KiB"]]}
+  - {id: TES-CRT-06, target: CreateTask, duty: 出力の path に POSIX のワイルドカード。使うなら path_prefix 必須, strength: Required if, place: 本文, min: 後,
+     at: [[tes/task_execution_service.openapi.yaml, "Required if `tesOutput.path` contains wildcards"]]}
+  - {id: TES-CRT-07, target: CreateTask, duty: 対応しない backend_parameters のキーは警告し、保存も返却もしない。strict なら失敗, strength: shall / should, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "Backends shall not store or return unsupported keys"], [tes/task_execution_service.openapi.yaml, "If set to true, backends should fail the task"]]}
+  - {id: TES-CRT-08, target: CreateTask, duty: 読み取り専用の項目(id・state・logs・creation_time)は送られても使わない, strength: readOnly, place: 形, min: ◯, gap: G-TES-04,
+     at: [[tes/task_execution_service.openapi.yaml, "readOnly: True"]]}
+  - {id: TES-RUN-01, target: 実行, duty: executor は順に 1 つずつ。最初の誤りで止まる(ignore_error なら続ける), strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "Execution stops on the first error."], [tes/task_execution_service.openapi.yaml, "stops on the first error. If `ignore_error`"]]}
+  - {id: TES-RUN-02, target: 実行, duty: volumes は空のディレクトリとして始まり、全 executor に同じパスで見える, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "Volumes are initialized as empty directories"]]}
+  - {id: TES-RUN-04, target: 実行, duty: 全 executor が、宣言した同じ入力と volumes を同じパスで見る, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "the executors will see the same mapped inputs and volumes that are declared"]]}
+  - {id: TES-RUN-03, target: 実行, duty: tesFileType はサーバーが実行時に埋める, strength: required(本文), place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "it is required that the server fill in the"]]}
+  - {id: TES-ST-01, target: 状態, duty: COMPLETE は executor が誤りなく終わり、出力のアップロードも成功したこと, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "and output files have been successfully uploaded."]]}
+  - {id: TES-ST-02, target: 状態, duty: 出力の転送の失敗などは SYSTEM_ERROR、executor の非 0 終了は EXECUTOR_ERROR, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "for example an upload failed due to network issues"]]}
+  - {id: TES-ST-03, target: 状態, duty: 取り消しは CANCELING(片付け待ち)を経て CANCELED(片付け済み), strength: 定義, place: 本文, min: ◯, gap: G-TES-02,
+     at: [[tes/task_execution_service.openapi.yaml, "but the downstream resources are still awaiting deletion."]]}
+  - {id: TES-ST-04, target: 状態, duty: 項目が無いときに QUEUED と取り違えないよう既定は UNKNOWN, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "that a missing field does not accidentally imply that"]]}
+  - {id: TES-LST-01, target: ListTasks, duty: page_size は 2048 未満、既定 256, strength: Must, place: 本文, min: ◯, gap: G-TES-03,
+     at: [[tes/task_execution_service.openapi.yaml, "Must be less than 2048. Defaults to 256."]]}
+  - {id: TES-LST-02, target: ListTasks, duty: name_prefix・state・tag_key/tag_value で絞る(本文の表の一致規則), strength: OPTIONAL(引数), place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "OPTIONAL. Filter the list to include tasks where the name matches this prefix."], [tes/task_execution_service.openapi.yaml, "If the tag_value is empty, it will be treated as matching any possible value."]]}
+  - {id: TES-LST-03, target: ListTasks, duty: next_page_token を page_token に渡して次のページ, strength: 定義, place: 本文, min: ◯, gap: G-X-04,
+     at: [[tes/task_execution_service.openapi.yaml, "in the `next_page_token` field of the last returned result of ListTasks"]]}
+  - {id: TES-VIEW-01, target: GetTask・ListTasks, duty: view は既定 MINIMAL(id と state だけ)。BASIC は stdout・stderr・content・system_logs を除く, strength: 定義, place: 本文, min: ◯,
+     at: [[tes/task_execution_service.openapi.yaml, "`MINIMAL`: Task message will include ONLY the fields:"], [tes/task_execution_service.openapi.yaml, "default: MINIMAL"]]}
+  - {id: TES-CAN-01, target: CancelTask, duty: 取り消しの応答は空のオブジェクト。終わったタスクへの取り消しは未定義, strength: 形, place: 形, min: 決, gap: G-TES-02,
+     at: [[tes/task_execution_service.openapi.yaml, "    tesCancelTaskResponse:"]]}
+  - {id: TES-ERR-01, target: 全体, duty: 誤りの応答(4xx・5xx)が 1 つも定義されていない, strength: なし, place: 形, min: 決, gap: G-TES-01,
+     at: [[tes/task_execution_service.openapi.yaml, "      operationId: GetTask"]]}
+wes:
+  - {id: WES-AUTH-01, target: 全体, duty: 利用者は身元と権限を示す資格情報を出す。Bearer 推奨。auth_instructions_url で案内, strength: must(users), place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "Users must supply credentials that establish their identity"]]}
+  - {id: WES-AUTH-02, target: 全体, duty: run を出してよいかの確かめは実装の責任, strength: 責任, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The WES implementation is responsible for checking that a user is authorized"]]}
+  - {id: WES-AUTH-03, target: 全体, duty: ジョブの入出力用の資格情報の受け渡しは対象外, strength: 範囲外, place: 本文, min: 決, gap: G-WES-01,
+     at: [[wes/workflow_execution_service.openapi.yaml, "are out of scope."]]}
+  - {id: WES-SI-01, target: service-info, duty: "workflow_type_versions・supported_wes_versions・supported_filesystem_protocols・workflow_engine_versions・default_workflow_engine_parameters・system_state_counts・auth_instructions_url・tags が必須", strength: required, place: 形, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "            - auth_instructions_url"]]}
+  - {id: WES-LST-01, target: ListRuns, duty: 並びは安定。最初のページを求めた時点の一覧を返す, strength: should, place: 本文, min: ◯, gap: G-X-04,
+     at: [[wes/workflow_execution_service.openapi.yaml, "This list should be provided in a stable ordering."]]}
+  - {id: WES-LST-02, target: ListRuns・ListTasks, duty: page_size より多く返してはならない, strength: must not, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The implementation must not return more items than `page_size`"], [wes/workflow_execution_service.openapi.yaml, "The implementation must not return more items"]]}
+  - {id: WES-LST-03, target: ListRuns, duty: 呼んだ人が見てよい run だけに絞る, strength: 定義, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The list is filtered to only include runs that the caller has permission to see."]]}
+  - {id: WES-LST-04, target: ListRuns・ListTasks, duty: next_page_token が空文字なら終わり, strength: 定義, place: 本文, min: ◯, gap: G-X-04,
+     at: [[wes/workflow_execution_service.openapi.yaml, "An empty string indicates there are no more items to return."]]}
+  - {id: WES-LST-05, target: ListRuns, duty: RunStatus でなく RunSummary を返す(2.0 で RunStatus は不可), strength: encourage, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "encourage implementers to use `RunSummary` instead."]]}
+  - {id: WES-RUN-01, target: RunWorkflow, duty: multipart/form-data。workflow_attachment の各部分は Content-Disposition の filename 必須, strength: must, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "These parts must have a Content-Disposition header"]]}
+  - {id: WES-RUN-02, target: RunWorkflow, duty: "添付のファイル名に「..」を含めてはならず、実装は悪意ある名前から守る", strength: must not / should, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "but must not include references to parent directories"]]}
+  - {id: WES-RUN-03, target: RunWorkflow, duty: workflow_url は WES から届く絶対 URL か、添付への相対 URL, strength: 定義, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The `workflow_url` is either an absolute URL"]]}
+  - {id: WES-RUN-04, target: RunWorkflow, duty: 入力の URL を WES が理解して取りに行ける, strength: must, place: 本文, min: ◯, gap: G-WES-01,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The WES endpoint must understand and be able to access URLs supplied in the input."]]}
+  - {id: WES-RUN-05, target: RunWorkflow, duty: workflow_type は CWL・WDL か、その WES が対応する別のもの。版・エンジン・エンジンの版も対応するものに限る, strength: must, place: 本文, min: ◯, gap: G-WES-05,
+     at: [[wes/workflow_execution_service.openapi.yaml, "The `workflow_type` is the type of workflow language and must be"]]}
+  - {id: WES-RUN-06, target: RunWorkflow, duty: workflow_engine_version を出すなら workflow_engine も要る, strength: Required if, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "Required if workflow_engine_version is provided."]]}
+  - {id: WES-RUN-07, target: RunRequest, duty: workflow_params は本文で REQUIRED だが schema の required に無い。multipart では文字列, strength: 食い違い, place: 本文, min: ◯, gap: G-WES-02,
+     at: [[wes/workflow_execution_service.openapi.yaml, "      title: RunRequest"], [wes/workflow_execution_service.openapi.yaml, "        required: false"]]}
+  - {id: WES-LOG-01, target: GetRunLog, duty: stdout・stderr は URL。WES と同じ資格情報で取れるべき, strength: should, place: 本文, min: ◯, gap: G-WES-03,
+     at: [[wes/workflow_execution_service.openapi.yaml, "Should be available using the same credentials used to access the WES endpoint."]]}
+  - {id: WES-LOG-02, target: Log・RunSummary, duty: "時刻は ISO 8601 \"%Y-%m-%dT%H:%M:%SZ\"", strength: 定義, place: 本文, min: ◯, gap: G-X-03,
+     at: [[wes/workflow_execution_service.openapi.yaml, "in ISO 8601 format \"%Y-%m-%dT%H:%M:%SZ\""]]}
+  - {id: WES-LOG-03, target: GetRunLog, duty: task_logs は非推奨。task_logs_url で一覧を指す, strength: deprecated, place: 形, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "        task_logs_url:"], [wes/workflow_execution_service.openapi.yaml, "This field is deprecated and the `task_logs_url` should be used"]]}
+  - {id: WES-TSK-01, target: ListTasks, duty: タスクの並びは RunLog と同じ, strength: should, place: 本文, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "Task ordering should be the same as what would be returned in a"]]}
+  - {id: WES-TSK-02, target: TaskLog, duty: id・name 必須。tes_uri は任意, strength: required, place: 形, min: ◯, gap: G-WES-04,
+     at: [[wes/workflow_execution_service.openapi.yaml, "            tes_uri:"]]}
+  - {id: WES-ST-01, target: 状態, duty: 状態の集合は TES と同じ 11 個。説明は TES のものを流用, strength: 定義, place: 本文, min: ◯, gap: G-WES-06,
+     at: [[wes/workflow_execution_service.openapi.yaml, "      title: State"]]}
+  - {id: WES-ERR-01, target: 全体, duty: 誤りは ErrorResponse(msg・status_code)。操作ごとに使える状態コードが決まっている, strength: 応答の定義, place: 形, min: ◯,
+     at: [[wes/workflow_execution_service.openapi.yaml, "    ErrorResponse:"]]}
+  - {id: WES-CAN-01, target: CancelRun, duty: 応答は RunId。終わった run への取り消しは未定義, strength: なし, place: 本文, min: 決, gap: G-WES-07,
+     at: [[wes/workflow_execution_service.openapi.yaml, "      operationId: CancelRun"]]}
+aai:
+  - {id: AAI-CH-01, target: Clearinghouse, duty: 少なくとも 1 つの Broker を信頼する(設定で持つ), strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "Passport Clearinghouses MUST trust at least one Broker."]]}
+  - {id: AAI-CH-02, target: Clearinghouse, duty: Passport を直接受けるなら Passport の有効性を確かめる, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "For Passport flows, Passport Clearinghouses MUST check the validity of the Passport."]]}
+  - {id: AAI-CH-03, target: Clearinghouse, duty: アクセストークンを受けるなら有効性を確かめるか不透明として扱う, strength: MUST, place: 本文, min: 外, gap: G-AAI-01,
+     at: [[aai/AAIConnectProfile.md, "For access token flows, Passport Clearinghouses MUST either check the validity"]]}
+  - {id: AAI-CH-04, target: Clearinghouse, duty: RFC 6819 の攻撃への備え, strength: MUST, place: 本文, min: △,
+     at: [[aai/AAIConnectProfile.md, "Passport Clearinghouses MUST provide protection against attacks as outlined in"]]}
+  - {id: AAI-CH-05, target: Visa, duty: JWT の検査(期限など)がすべて通ること, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "The Passport Clearinghouse MUST validate that all JWT checks pass"]]}
+  - {id: AAI-CH-06, target: Visa Access Token, duty: iat から 1 時間を超え、Polling で有効と確かめられなければ無効, strength: MUST(invalid), place: 本文, min: 外, gap: G-AAI-02,
+     at: [[aai/AAIConnectProfile.md, "invalid if it is more than 1 hour old"]]}
+  - {id: AAI-CH-07, target: Visa Document Token, duty: jku から鍵を取るなら、取りに行く前に jku がその iss の信頼先かを確かめる, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "then it MUST verify that the `jku` is"], [aai/AAIConnectProfile.md, "This check MUST be performed before"]]}
+  - {id: AAI-CH-08, target: Polling, duty: 問い合わせは 1 時間に 1 回まで。再試行は指数的に待つ, strength: MUST NOT, place: 本文, min: 外,
+     at: [[aai/AAIConnectProfile.md, "This MUST NOT be done more than once per hour"]]}
+  - {id: AAI-FMT-01, target: Passport, duty: typ は vnd.ga4gh.passport+jwt, strength: REQUIRED, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "`typ`: REQUIRED where the value must be `vnd.ga4gh.passport+jwt`"]]}
+  - {id: AAI-FMT-02, target: Passport, duty: iss・sub・iat・exp・ga4gh_passport_v1 必須(空配列可)。aud は任意, strength: REQUIRED, place: 本文, min: ◯, gap: G-AAI-03,
+     at: [[aai/AAIConnectProfile.md, "- `ga4gh_passport_v1`: REQUIRED. An array of GA4GH Visas."]]}
+  - {id: AAI-FMT-03, target: 全 JWT, duty: 署名は ES256 か RS256, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "JWTs MUST be issued with signatures using the `ES256` or `RS256` algorithm."]]}
+  - {id: AAI-FMT-04, target: Passport-Scoped Access Token, duty: scope に openid と ga4gh_passport_v1。GA4GH Claim を含めない, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "The access token MUST be a JWS-encoded JWT token containing `openid` and `ga4gh_passport_v1`"], [aai/AAIConnectProfile.md, "(`ga4gh_passport_v1` or `ga4gh_visa_v1`): MUST NOT be included."]]}
+  - {id: AAI-FMT-05, target: Visa Document Token, duty: ヘッダーに jku。scope に openid を含めない, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "The JWS header MUST contain `jku`"], [aai/AAIConnectProfile.md, "if included, MUST NOT contain \"openid\""]]}
+  - {id: AAI-CLI-01, target: 秘密を含む応答, duty: "Cache-Control: no-cache, no-store と Pragma: no-cache", strength: MUST, place: 本文, min: ◯, gap: G-AAI-04,
+     at: [[aai/AAIConnectProfile.md, "All responses that contain tokens, secrets, or other sensitive"]]}
+  - {id: AAI-ISS-01, target: Passport Issuer(試験用), duty: Token Exchange の requested_token_type などの決まり, strength: MUST, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "`requested_token_type` parameter MUST be present"]]}
+  - {id: PP-CH-01, target: Clearinghouse, duty: 検査に通らない Passport を含む要求は拒否する, strength: MUST, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "Passport Clearinghouses MUST reject all requests that include Passports"]]}
+  - {id: PP-CH-02, target: Clearinghouse, duty: その要求に要らない Visa は無視する, strength: MUST, place: 本文, min: △, gap: G-AAI-10,
+     at: [[passport/ga4gh_passport_v1.md, "A Passport Clearinghouse MUST ignore all Visas it does not"]]}
+  - {id: PP-CH-03, target: Clearinghouse, duty: Broker・Visa Assertion Source・Visa Issuer を信頼できなければ無視する, strength: MUST, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "Passport Clearinghouses MUST ignore Passports and Visas"]]}
+  - {id: PP-CH-04, target: Clearinghouse, duty: 複数の Visa Identity を組み合わせるなら LinkedIdentities で同一人物と確かめる, strength: MUST, place: 本文, min: △, gap: G-AAI-06,
+     at: [[passport/ga4gh_passport_v1.md, "When combining Visas with multiple [Visa Identities]"]]}
+  - {id: PP-VISA-01, target: Visa, duty: iss・sub・iat・exp 必須。scope か jku のどちらかが要る, strength: REQUIRED / MUST, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "The standard JWT payload claims `iss`, `sub`, `iat`, `exp` are all REQUIRED."], [passport/ga4gh_passport_v1.md, "One of `scope` or `jku` MUST be present"]]}
+  - {id: PP-VISA-02, target: Visa, duty: conditions が有れば満たされたと確かめられるときだけ受ける。評価しないなら空でない conditions の Visa は拒否, strength: MUST, place: 本文, min: △,
+     at: [[passport/ga4gh_passport_v1.md, "A Passport Clearinghouse MUST always check for the presence of"], [passport/ga4gh_passport_v1.md, "Objects and reject (ignore) any Visas that contain a non-empty"]]}
+  - {id: PP-VISA-05, target: Visa, duty: ga4gh_visa_v1 の asserted は必須(エポック秒)。Visa Expiry の計算に使ってよい, strength: REQUIRED, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "#### \"**asserted**\""], [passport/ga4gh_passport_v1.md, "`asserted` MAY be used by a Passport Clearinghouse as described in the"]]}
+  - {id: PP-VISA-06, target: Visa, duty: "typ は任意。Visa Document Token なら vnd.ga4gh.visa+jwt を推奨、JWT も可", strength: OPTIONAL / RECOMMENDED / MAY, place: 本文, min: ◯, gap: G-AAI-05,
+     at: [[passport/ga4gh_passport_v1.md, "The value `JWT` marking  general JWTs MAY also be used."]]}
+  - {id: AAI-FMT-06, target: Visa Document Token, duty: 失効の手続きなしに出してよい(Clearinghouse は失効を知る手段を持たない), strength: MAY, place: 本文, min: ◯,
+     at: [[aai/AAIConnectProfile.md, "revocation process."]]}
+  - {id: PP-VISA-03, target: Visa, duty: 対応しない独自 type の Visa は無視する, strength: MUST, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "Passport Clearinghouses MUST ignore all Visas containing a custom"]]}
+  - {id: PP-VISA-04, target: ControlledAccessGrants, duty: by を含む。value は URL Claim, strength: MUST, place: 本文, min: ◯,
+     at: [[passport/ga4gh_passport_v1.md, "### ControlledAccessGrants"]]}
+  - {id: PP-EXP-01, target: Clearinghouse, duty: 求められた期間のアクセスを与えるなら Option A か B で Visa の期限を考える。複数の Visa なら最小の期限, strength: MUST, place: 本文, min: ◯, gap: G-X-02,
+     at: [[passport/ga4gh_passport_v1.md, "duration provided by the user (excluding any revocation policies) MUST"], [passport/ga4gh_passport_v1.md, "be the minimum expiry timestamp"]]}
+  - {id: PP-REV-01, target: Clearinghouse, duty: asserted・exp を必ず確かめ、期限までに(か少し後に)アクセスを止める仕組みを持つ, strength: MUST, place: 本文, min: ◯, gap: G-X-02,
+     at: [[passport/ga4gh_passport_v1.md, "At a minimum, these Visa Claims MUST be checked by all Passport"]]}

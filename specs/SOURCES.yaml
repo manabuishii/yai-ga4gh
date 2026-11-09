@@ -1,0 +1,140 @@
+# Where the specification files come from. None of them is copied into this repository:
+# tools/ext_specs.py downloads each file from a pinned commit (GitHub) or a fixed URL into
+# build/specs-ext/<local path> and checks it against specs/EXTERNAL.SHA256SUMS (a mismatch fails).
+# `files` maps the local path (relative to specs/ and to build/specs-ext/) to the path in the
+# repository at `commit`, or to a full URL. Background: docs/spec-pins.md.
+drs:
+  repo: https://github.com/ga4gh/data-repository-service-schemas
+  tag: drs-1.5.0
+  tag_object: a0e65629c90182fe9daf60087fe9b89e0b953138   # annotated tag
+  commit: fe25c3953ae3398a31054d3f9f040d5e27aad517       # commit the tag points to (peeled)
+  commit_date: 2025-03-24T14:56:52-07:00
+  files:
+    drs/LICENSE: LICENSE
+    drs/openapi/components/parameters/AccessId.yaml: openapi/components/parameters/AccessId.yaml
+    drs/openapi/components/parameters/BulkObjectAccessId.yaml: openapi/components/parameters/BulkObjectAccessId.yaml
+    drs/openapi/components/parameters/BulkObjectId.yaml: openapi/components/parameters/BulkObjectId.yaml
+    drs/openapi/components/parameters/BulkObjectIdNoPassport.yaml: openapi/components/parameters/BulkObjectIdNoPassport.yaml
+    drs/openapi/components/parameters/BulkObjectSingleAccessId.yaml: openapi/components/parameters/BulkObjectSingleAccessId.yaml
+    drs/openapi/components/parameters/Expand.yaml: openapi/components/parameters/Expand.yaml
+    drs/openapi/components/parameters/ObjectId.yaml: openapi/components/parameters/ObjectId.yaml
+    drs/openapi/components/requestBodies/Passports.yaml: openapi/components/requestBodies/Passports.yaml
+    drs/openapi/components/requestBodies/PostObjectBody.yaml: openapi/components/requestBodies/PostObjectBody.yaml
+    drs/openapi/components/responses/200OkAccess.yaml: openapi/components/responses/200OkAccess.yaml
+    drs/openapi/components/responses/200OkAccesses.yaml: openapi/components/responses/200OkAccesses.yaml
+    drs/openapi/components/responses/200OkAuthorizations.yaml: openapi/components/responses/200OkAuthorizations.yaml
+    drs/openapi/components/responses/200OkBulkAuthorizations.yaml: openapi/components/responses/200OkBulkAuthorizations.yaml
+    drs/openapi/components/responses/200OkDrsObject.yaml: openapi/components/responses/200OkDrsObject.yaml
+    drs/openapi/components/responses/200OkDrsObjects.yaml: openapi/components/responses/200OkDrsObjects.yaml
+    drs/openapi/components/responses/200ServiceInfo.yaml: openapi/components/responses/200ServiceInfo.yaml
+    drs/openapi/components/responses/202Accepted.yaml: openapi/components/responses/202Accepted.yaml
+    drs/openapi/components/responses/400BadRequest.yaml: openapi/components/responses/400BadRequest.yaml
+    drs/openapi/components/responses/401Unauthorized.yaml: openapi/components/responses/401Unauthorized.yaml
+    drs/openapi/components/responses/403Forbidden.yaml: openapi/components/responses/403Forbidden.yaml
+    drs/openapi/components/responses/404NotFoundAccess.yaml: openapi/components/responses/404NotFoundAccess.yaml
+    drs/openapi/components/responses/404NotFoundDrsObject.yaml: openapi/components/responses/404NotFoundDrsObject.yaml
+    drs/openapi/components/responses/413RequestTooLarge.yaml: openapi/components/responses/413RequestTooLarge.yaml
+    drs/openapi/components/responses/500InternalServerError.yaml: openapi/components/responses/500InternalServerError.yaml
+    drs/openapi/components/responses/AuthorizationsNotSupported.yaml: openapi/components/responses/AuthorizationsNotSupported.yaml
+    drs/openapi/components/schemas/AccessMethod.yaml: openapi/components/schemas/AccessMethod.yaml
+    drs/openapi/components/schemas/AccessURL.yaml: openapi/components/schemas/AccessURL.yaml
+    drs/openapi/components/schemas/Authorizations.yaml: openapi/components/schemas/Authorizations.yaml
+    drs/openapi/components/schemas/BulkAccessURL.yaml: openapi/components/schemas/BulkAccessURL.yaml
+    drs/openapi/components/schemas/Checksum.yaml: openapi/components/schemas/Checksum.yaml
+    drs/openapi/components/schemas/ContentsObject.yaml: openapi/components/schemas/ContentsObject.yaml
+    drs/openapi/components/schemas/DrsObject.yaml: openapi/components/schemas/DrsObject.yaml
+    drs/openapi/components/schemas/DrsService.yaml: openapi/components/schemas/DrsService.yaml
+    drs/openapi/components/schemas/Error.yaml: openapi/components/schemas/Error.yaml
+    drs/openapi/components/schemas/summary.yaml: openapi/components/schemas/summary.yaml
+    drs/openapi/components/schemas/unresolved.yaml: openapi/components/schemas/unresolved.yaml
+    drs/openapi/data_repository_service.openapi.yaml: openapi/data_repository_service.openapi.yaml
+    drs/openapi/paths/bulkobjects@access@{access_id}.yaml: openapi/paths/bulkobjects@access@{access_id}.yaml
+    drs/openapi/paths/bulkobjects@{object_id}.yaml: openapi/paths/bulkobjects@{object_id}.yaml
+    drs/openapi/paths/objects@{object_id}.yaml: openapi/paths/objects@{object_id}.yaml
+    drs/openapi/paths/objects@{object_id}@access@{access_id}.yaml: openapi/paths/objects@{object_id}@access@{access_id}.yaml
+    drs/openapi/paths/service-info.yaml: openapi/paths/service-info.yaml
+    drs/openapi/tags/Auth.md: openapi/tags/Auth.md
+    drs/openapi/tags/BackgroundNotesOnDRSURIs.md: openapi/tags/BackgroundNotesOnDRSURIs.md
+    drs/openapi/tags/CompactIdentifierBasedURIs.md: openapi/tags/CompactIdentifierBasedURIs.md
+    drs/openapi/tags/CompoundObjects.md: openapi/tags/CompoundObjects.md
+    drs/openapi/tags/DrsApiPrinciples.md: openapi/tags/DrsApiPrinciples.md
+    drs/openapi/tags/HostnameBasedURIs.md: openapi/tags/HostnameBasedURIs.md
+    drs/openapi/tags/Introduction.md: openapi/tags/Introduction.md
+    drs/openapi/tags/Motivation.md: openapi/tags/Motivation.md
+    drs/openapi/tags/ServiceRegistry.md: openapi/tags/ServiceRegistry.md
+wes:
+  repo: https://github.com/ga4gh/workflow-execution-service-schemas
+  tag: 1.1.0
+  commit: 226f43b1fec97ad3778897a27a9651ccfa631d77
+  commit_date: 2023-09-14T11:04:34-04:00
+  files:
+    wes/LICENSE: LICENSE
+    wes/workflow_execution_service.openapi.yaml: openapi/workflow_execution_service.openapi.yaml
+tes:
+  repo: https://github.com/ga4gh/task-execution-schemas
+  tag: v1.1
+  commit: 117cd927aa119469ee80cedbd8940c968b81c5d6
+  commit_date: 2022-11-14T23:36:00-08:00
+  files:
+    tes/LICENSE: LICENSE
+    tes/task_execution_service.openapi.yaml: openapi/task_execution_service.openapi.yaml
+aai:
+  repo: https://github.com/ga4gh/data-security
+  tag: AAIv1.2
+  commit: 9d05792a87ab96bf46566369053c28deb63afb78
+  commit_date: 2023-01-17T15:42:54-05:00
+  note: the repository has no LICENSE file at this commit
+  files:
+    aai/AAIConnectProfile.md: AAI/AAIConnectProfile.md
+    aai/CHANGES_1.2.md: AAI/CHANGES_1.2.md
+passport:
+  repo: https://github.com/ga4gh-duri/ga4gh-duri.github.io
+  tag: null            # no tag on 2026-10-15; pinned to the head of the default branch (tag 1.2 points to it since, docs/spec-pins.md section 3)
+  commit: 82546d502c78ca341035a75c69f36edc8c50927a
+  commit_date: 2023-03-30T12:02:39+02:00
+  file_last_changed_by: a4ee601   # 2023-03-30 "Mark \"typ\" as optional in Visa" (after the AAIv1.2 tag)
+  file_version_line: "Version: 1.2"
+  note: the repository has no LICENSE file at this commit
+  files:
+    passport/ga4gh_passport_v1.md: researcher_ids/ga4gh_passport_v1.md
+service-info:
+  repo: https://github.com/ga4gh-discovery/ga4gh-service-info
+  tag: v1.0.0
+  commit: daa4014a27545376415882a1ef17cf9fc4ae6a05
+  referenced_by:   # every external $ref of DRS, WES and TES points here (5 places in the 3 APIs)
+    - drs/openapi/components/responses/200ServiceInfo.yaml:6 (#/components/schemas/Service)
+    - wes/workflow_execution_service.openapi.yaml:604 (#/components/schemas/Service)
+    - tes/task_execution_service.openapi.yaml:651 (#/components/schemas/ServiceType)
+    - tes/task_execution_service.openapi.yaml:662 (#/components/schemas/Service)
+  files:
+    service-info/LICENSE: LICENSE
+    service-info/service-info.yaml: service-info.yaml
+base:   # the underlying RFCs and OpenID Connect documents of AAI and Passport (quoted by docs/data/aai-base.yaml)
+  fetched: 2026-10-16
+  note: OpenID Connect URLs are the versioned ones (core and discovery incorporating errata set 2, basic draft 47)
+  files:
+    base/openid-connect-basic-1_0.html: https://openid.net/specs/openid-connect-basic-1_0-47.html
+    base/openid-connect-core-1_0.html: https://openid.net/specs/openid-connect-core-1_0-errata2.html
+    base/openid-connect-discovery-1_0.html: https://openid.net/specs/openid-connect-discovery-1_0-errata2.html
+    base/rfc5246.txt: https://www.rfc-editor.org/rfc/rfc5246.txt
+    base/rfc6749.txt: https://www.rfc-editor.org/rfc/rfc6749.txt
+    base/rfc6750.txt: https://www.rfc-editor.org/rfc/rfc6750.txt
+    base/rfc6819.txt: https://www.rfc-editor.org/rfc/rfc6819.txt
+    base/rfc7515.txt: https://www.rfc-editor.org/rfc/rfc7515.txt
+    base/rfc7517.txt: https://www.rfc-editor.org/rfc/rfc7517.txt
+    base/rfc7518.txt: https://www.rfc-editor.org/rfc/rfc7518.txt
+    base/rfc7519.txt: https://www.rfc-editor.org/rfc/rfc7519.txt
+    base/rfc7636.txt: https://www.rfc-editor.org/rfc/rfc7636.txt
+    base/rfc7662.txt: https://www.rfc-editor.org/rfc/rfc7662.txt
+    base/rfc8414.txt: https://www.rfc-editor.org/rfc/rfc8414.txt
+    base/rfc8446.txt: https://www.rfc-editor.org/rfc/rfc8446.txt
+    base/rfc8693.txt: https://www.rfc-editor.org/rfc/rfc8693.txt
+    base/rfc8725.txt: https://www.rfc-editor.org/rfc/rfc8725.txt
+    base/rfc9068.txt: https://www.rfc-editor.org/rfc/rfc9068.txt
+interop-sapporo:   # not a specification: the job script of the interoperability partner Sapporo (deploy/interop/setup.sh rewrites a copy of it)
+  repo: https://github.com/sapporo-wes/sapporo-service
+  tag: 2.4.0
+  commit: 14e6b5c24dbe9fd1ed8165b7924808498eb4e7ea
+  license: Apache-2.0
+  files:
+    interop/sapporo/run.sh: sapporo/run.sh

@@ -1,0 +1,25 @@
+# yai-wes (combined tests)
+data_dir: /yai/var/wes
+public_base_url: https://wes.yai.test
+auth:
+  mode: aai
+  issuer: https://aai.yai.test/
+  jwks_uri: https://aai.yai.test/.well-known/jwks.json
+  audience: yai-wes
+tes:
+  url: https://tes.yai.test/ga4gh/tes/v1
+  token_url: https://aai.yai.test/token
+  client_id: yai-wes
+  client_secret_file: /yai/local/secrets/wes-client-secret
+resolver:
+  passport_hosts: [drs.yai.test]
+  compact: {yaitest.drs: "https://drs.yai.test/ga4gh/drs/v1/objects/{id}"}   # G-DRS-02
+engine:
+  poll_seconds: 2
+  nonce_search_seconds: 60
+  nonce_search_interval: 10
+  cancel_retry_seconds: 10
+  unreachable_limit_seconds: 1800
+  output_root: /yai/var/tes/files       # same as files_root of TES (path inside the TES container)
+fetch:
+  allow: ["drs.yai.test:443"]

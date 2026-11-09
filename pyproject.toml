@@ -1,0 +1,67 @@
+[project]
+name = "yai-ga4gh"
+version = "0.1.0"
+description = "yet another implementation of GA4GH DRS / AAI / TES / WES (for learning)"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "joserfc>=1.0",
+    "pyyaml>=6",
+    "python-multipart>=0.0.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "openapi-core>=0.19",
+    "ruff>=0.6",
+    "jsonschema>=4.26.0",
+    "types-pyyaml>=6.0.12.20260906",
+    "pyright>=1.1.414",
+]
+
+[project.urls]
+Repository = "https://github.com/manabuishii/yai-ga4gh"
+Issues = "https://github.com/manabuishii/yai-ga4gh/issues"
+
+[project.scripts]
+yai = "yai.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]  # SPDX license expression (PEP 639)
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["yai"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # allow ambiguous Unicode characters (docs data still has Japanese)
+    "S101",                        # assert in tests
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Body"]  # how FastAPI takes request bodies (not B008)
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S"]
+"tools/gen_obligations.py" = ["E501"]  # text of the generated document
+"tools/gen_diagram.py" = ["E501"]  # text of the generated documents and diagram
+"tools/gen_tre.py" = ["E501"]  # text of the generated diagram
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+markers = [
+    "e2e: the four services working together (tests/test_e2e.py; local processes and compose)",
+    "docker: needs a real Docker and compose (runs only with YAI_E2E_DOCKER=1; skipped otherwise)",
+]

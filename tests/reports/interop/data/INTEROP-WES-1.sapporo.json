@@ -1,0 +1,133 @@
+{
+ "pair": "INTEROP-WES-1",
+ "partner": "Sapporo 2.4.0 (ghcr, cwltool)",
+ "started": "2026-10-17T06:36:46Z",
+ "steps": [
+  {
+   "name": "GET /service-info が 200 で WES 1.1.0 の ServiceInfo の鍵を持つ",
+   "ok": true,
+   "status": 200,
+   "missing": [],
+   "supported_wes_versions": [
+    "sapporo-wes-2.1.0"
+   ],
+   "workflow_engine_versions": {
+    "cwltool": {
+     "workflow_engine_version": [
+      "3.3.20260925135507"
+     ]
+    },
+    "nextflow": {
+     "workflow_engine_version": [
+      "26.10.0"
+     ]
+    },
+    "toil": {
+     "workflow_engine_version": [
+      "9.5.0"
+     ]
+    },
+    "cromwell": {
+     "workflow_engine_version": [
+      "92"
+     ]
+    },
+    "snakemake": {
+     "workflow_engine_version": [
+      "v9.27.0"
+     ]
+    },
+    "ep3": {
+     "workflow_engine_version": [
+      "v1.7.0"
+     ]
+    },
+    "streamflow": {
+     "workflow_engine_version": [
+      "0.2.0rc3"
+     ]
+    }
+   },
+   "default_workflow_engine_parameters_type": "dict"
+  },
+  {
+   "name": "POST /runs(multipart、CWL と入力を添付)が 200 で run_id",
+   "ok": true,
+   "status": 200,
+   "body": "{\"run_id\":\"f560b956-9fee-4af0-b325-0b08bd5f2b0b\"}"
+  },
+  {
+   "name": "GET /runs/{id}/status が終わりの状態(COMPLETE)まで動く",
+   "ok": true,
+   "state": "COMPLETE"
+  },
+  {
+   "name": "GET /runs/{id} が RunLog(run_id・request・state・run_log・outputs)",
+   "ok": true,
+   "keys": [
+    "outputs",
+    "request",
+    "run_id",
+    "run_log",
+    "state",
+    "task_logs",
+    "task_logs_url"
+   ],
+   "outputs_type": "list",
+   "outputs": "[{\"file_name\": \"copy.txt\", \"file_url\": \"https://sapporo.yai.test/runs/f560b956-9fee-4af0-b325-0b08bd5f2b0b/outputs/copy.txt\"}]",
+   "run_log_keys": [
+    "cmd",
+    "end_time",
+    "exit_code",
+    "name",
+    "start_time",
+    "stderr",
+    "stdout",
+    "system_logs"
+   ],
+   "stdout_form": "other",
+   "stdout": "{\n    \"out\": {\n        \"location\": \"file://<YAI_LOCAL_DIR>/interop/sapporo-runs/f5/f560b956-9fee-4af0-b325-0b08bd5f2b0b/outputs/copy.txt\",\n        \"basename\": \"copy.txt\",\n        \"class\": \"File\",\n        \"checksum\": \"sha1$97059669371ed42a72435dc0266a432db4348ccc\",\n        \"size\": 18,\n        \"path\": \"<YAI_LOCAL_DIR>/interop/sapporo-runs/f5/f560b956-9fee-4af0-b325-0b08bd5f2b0b/outputs/copy.txt\"\n    }\n}",
+   "system_logs": "[]"
+  },
+  {
+   "name": "出力 copy.txt の中身が入力と同じ(相手の file_url から取る)",
+   "ok": true,
+   "file_url": "https://sapporo.yai.test/runs/f560b956-9fee-4af0-b325-0b08bd5f2b0b/outputs/copy.txt",
+   "status": 200
+  },
+  {
+   "name": "GET /runs?page_size=1 が RunListResponse(runs は 1 件)",
+   "ok": true,
+   "status": 200,
+   "n": 1,
+   "next_page_token": "eyJzdGFydF90aW1lIjogIjIwMjYtMTAtMTdUMDY6MzY6NDYrMDA6MDAiLCAicnVuX2lkIjogImY1NjBiOTU2LTlmZWUtNGFmMC1iMzI1LTBiMDhiZDVmMmIwYiJ9.bfWZPXzV9nhzC1FWcnfbpLGH1SmAkxiY2-S4ovk4T4c="
+  },
+  {
+   "name": "GET /runs/{id}/tasks(WES 1.1.0 で定義)",
+   "ok": false,
+   "status": 400,
+   "body": "{\"msg\":\"Sorry, this endpoint is not implemented and there are no plans to implement it.\",\"status_code\":400}"
+  },
+  {
+   "name": "POST /runs/{id}/cancel → CANCELED",
+   "ok": true,
+   "cancel_status": 200,
+   "state": "CANCELED"
+  },
+  {
+   "name": "GET /runs/{無い id、UUID の形} が 404 で ErrorResponse {msg, status_code}",
+   "ok": true,
+   "status": 404,
+   "body": "{\"msg\":\"Run ID 00000000-0000-4000-8000-000000000000 not found.\",\"status_code\":404}"
+  },
+  {
+   "name": "GET /runs/{無い id} が 404 で ErrorResponse {msg, status_code}",
+   "ok": false,
+   "status": 400,
+   "body": "{\"msg\":\"Invalid run_id format: does-not-exist-0000\",\"status_code\":400}"
+  }
+ ],
+ "finished": "2026-10-17T06:36:54Z",
+ "passed": 8,
+ "failed": 2
+}

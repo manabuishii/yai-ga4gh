@@ -1,0 +1,153 @@
+# Interoperability partners (test-plan.md section 6, stage 3). A project separate from the main one
+# (deploy/compose.yaml) that joins the same network (yai-net) from outside.
+# Partners get the local CA (certs/ca.pem); a second Caddy (proxy) serves their *.yai.test names
+# (with the same *.yai.test certificate).
+# Same rules as compose.yaml: no --privileged, host network or pid, never mount the rootful socket,
+# every bind mount source under YAI_LOCAL_DIR (setup.sh copies to local/interop/), nothing published
+# to the host (D-002).
+# Partners that use Docker (Funnel, Sapporo) get the rootless socket directory read-only, like the
+# yai runner, and their working directory at the path the daemon sees (neither has a translation
+# like host_work_dir of yai).
+# Usage: tools/interop.sh (up/down). Partner versions: the table in deploy/interop/README.md
+name: ${YAI_PROJECT:-yai}-interop
+
+x-partner: &partner
+  restart: "no"
+  security_opt: [no-new-privileges:true]
+  networks: [yai]
+
+services:
+  # Second Caddy for the partners' names: funnel.yai.test, pgdrs.yai.test, sapporo.yai.test, broker.yai.test
+  proxy:
+    <<: *partner
+    image: ${YAI_CADDY_IMAGE:-caddy:2.11.7-alpine}
+    read_only: true
+    tmpfs: [/tmp, /config, /data]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    volumes:
+      - ${YAI_LOCAL_DIR:-../local}/interop/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${YAI_LOCAL_DIR:-../local}/certs:/certs:ro
+    networks:
+      yai:
+        aliases: [funnel.yai.test, pgdrs.yai.test, sapporo.yai.test, broker.yai.test]
+
+  # Partner of INTEROP-TES-2: Funnel (calypr/funnel v0.11.14). Derived image with docker CLI 27.3.1 added,
+  # as the image has no docker CLI
+  funnel:
+    <<: *partner
+    image: ${YAI_INTEROP_FUNNEL_IMAGE:-yai-interop-funnel:v0.11.14-docker27.3.1}
+    build: {context: ./funnel}
+    command: [server, run, --config, /etc/funnel/funnel.yaml]
+    cap_drop: [ALL]
+    environment:
+      SSL_CERT_FILE: /certs/ca.pem                 # read by Go's crypto/x509 (fetches yai-drs signed URLs over https)
+      DOCKER_HOST: ${YAI_DOCKER_HOST:-}
+      DOCKER_CONFIG: /tmp/docker
+    volumes:
+      - ${YAI_LOCAL_DIR:-../local}/interop/funnel/funnel.yaml:/etc/funnel/funnel.yaml:ro
+      - ${YAI_LOCAL_DIR:-../local}/certs:/certs:ro
+      # working directory at the same path as the daemon sees it (Funnel passes this path to docker run -v as is)
+      - ${YAI_LOCAL_DIR:-../local}/interop/funnel-work:${YAI_LOCAL_DIR:-../local}/interop/funnel-work
+      - ${YAI_DOCKER_SOCK_DIR:-../local/docker-sock}:/run/yai-docker:ro
+      # where yai-wes outputs go (file:///yai/var/tes/files/...): the same volume as yai-tes
+      - tes-files:/yai/var/tes/files
+
+  # Partner of INTEROP-DRS-1: ga4gh/passport-playground-drs (main 5eb7745, DRS 1.5.0, FastAPI)
+  pgdrs:
+    <<: *partner
+    image: ${YAI_INTEROP_PGDRS_IMAGE:-yai-interop-pgdrs:5eb7745}
+    build: {context: ./pgdrs}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    environment:
+      DRS_HOST: pgdrs.yai.test       # self_uri drs://pgdrs.yai.test/<id>
+      DRS_PORT: "8645"               # access URLs are http://pgdrs.yai.test:8645/files/... (main.py always uses http)
+      DRS_DATA_DIR: /app/data
+
+  # Partner of INTEROP-WES-1: Sapporo 2.4.0 (ghcr.io/sapporo-wes/sapporo-service:2.4.0).
+  # Its run.sh passes the rootful /var/run/docker.sock to cwltool, so a copy rewritten for the rootless socket
+  # is passed with the setting run_sh (SAPPORO_RUN_SH); setup.sh makes it
+  sapporo:
+    <<: *partner
+    image: ${YAI_INTEROP_SAPPORO_IMAGE:-ghcr.io/sapporo-wes/sapporo-service:2.4.0}
+    init: true
+    cap_drop: [ALL]
+    environment:
+      SAPPORO_HOST: 0.0.0.0
+      SAPPORO_PORT: "1122"
+      SAPPORO_RUN_DIR: ${YAI_LOCAL_DIR:-../local}/interop/sapporo-runs
+      SAPPORO_RUN_SH: /etc/sapporo/run.sh
+      SAPPORO_BASE_URL: https://sapporo.yai.test
+      DOCKER_HOST: ${YAI_DOCKER_HOST:-}
+      DOCKER_CONFIG: /tmp/docker
+      YAI_DOCKER_SOCK_DIR: ${YAI_DOCKER_SOCK_DIR:-../local/docker-sock}   # the rewritten run.sh mounts it in the cwltool container
+    volumes:
+      - ${YAI_LOCAL_DIR:-../local}/interop/sapporo/run.sh:/etc/sapporo/run.sh:ro
+      - ${YAI_LOCAL_DIR:-../local}/interop/sapporo-runs:${YAI_LOCAL_DIR:-../local}/interop/sapporo-runs
+      - ${YAI_DOCKER_SOCK_DIR:-../local/docker-sock}:/run/yai-docker:ro
+
+  # Partner of INTEROP-AAI-1: the Broker of the GA4GH Passport Playground = Ory Hydra v26.2.0 (its README steps as compose).
+  # --dev as in the playground's steps (the http admin endpoint stays inside the network). DSN=memory: data is lost on stop
+  hydra:
+    <<: *partner
+    image: ${YAI_INTEROP_HYDRA_IMAGE:-oryd/hydra:v26.2.0}
+    command: [serve, all, --dev]
+    cap_drop: [ALL]
+    environment:
+      DSN: memory
+      URLS_SELF_ISSUER: https://broker.yai.test/
+      URLS_LOGIN: https://broker.yai.test/login
+      URLS_CONSENT: https://broker.yai.test/consent
+      STRATEGIES_ACCESS_TOKEN: jwt
+      # Hydra's internal encryption key: a test constant (DSN=memory, never leaves the network). Not a secret (put a real one in compose.env)
+      SECRETS_SYSTEM: ${YAI_INTEROP_HYDRA_SECRET:-this-is-only-a-test-secret-32-chars}
+      LOG_LEAK_SENSITIVE_VALUES: "false"
+
+  # Playground Issuer (Flask, bfb0232). Returns unsigned JSON Visas (started to check them)
+  issuer:
+    <<: *partner
+    image: ${YAI_INTEROP_ISSUER_IMAGE:-yai-interop-issuer:bfb0232}
+    build: {context: ./issuer}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    environment: {PORT: "8080", HOME: /tmp}   # gunicorn's control server writes to HOME
+
+  # One-off container that runs partner clients and check scripts (py-tes 1.1.4 and others). profile client
+  client:
+    <<: *partner
+    image: ${YAI_INTEROP_CLIENT_IMAGE:-yai-interop-client:py-tes-1.1.4}
+    build: {context: ./clients}
+    profiles: [client]
+    user: "${YAI_UID:-0}:${YAI_GID:-0}"     # writes to /out (with rootless Docker only 0:0 can write, D-034)
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    working_dir: /work
+    environment:
+      SSL_CERT_FILE: /certs/ca.pem
+      REQUESTS_CA_BUNDLE: /certs/ca.pem        # py-tes uses requests
+      YAI_SECRETS: /yai/local/secrets
+      YAI_REPORT_DIR: /out
+      YAI_E2E_IDS: /yai/e2e/ids.json
+    volumes:
+      - ${YAI_LOCAL_DIR:-../local}/certs:/certs:ro
+      - ${YAI_LOCAL_DIR:-../local}/secrets:/yai/local/secrets:ro
+      - ${YAI_LOCAL_DIR:-../local}/interop/out:/out
+      - ${YAI_LOCAL_DIR:-../local}/interop/cases:/work/cases:ro
+      - e2e-state:/yai/e2e:ro                  # IDs that seed registered in DRS (observer, D-023)
+
+networks:
+  yai:
+    name: ${YAI_NETWORK:-yai-net}
+    external: true
+
+volumes:
+  tes-files:
+    name: ${YAI_PROJECT:-yai}-tes-files
+    external: true
+  e2e-state:
+    name: ${YAI_PROJECT:-yai}-e2e-state
+    external: true

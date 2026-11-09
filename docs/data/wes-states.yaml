@@ -1,0 +1,29 @@
+# yai-wes の run の状態の移り方(仕様 WES 1.1.0 の State。docs/design/wes.md 4 節)
+# 状態の名前は TES と同じ集合だが、意味は run 全体に対して yai が定める(G-WES-06)
+spec: wes-1.1.0
+initial: QUEUED
+terminal: [COMPLETE, EXECUTOR_ERROR, SYSTEM_ERROR, CANCELED]
+unused: [PAUSED, PREEMPTED, UNKNOWN]
+transitions:
+  - {from: QUEUED,       to: INITIALIZING,   on: engine_started,      note: 保存したワークフローの文書を読み、ステップ 1 の入力の DRS を解決し始めた}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: prepare_failed,      note: DRS の解決の失敗・Passport の期限切れ・送ってよい先でない}
+  - {from: INITIALIZING, to: RUNNING,        on: first_task_submitted, note: 最初の TES タスクを出した}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: task_submit_failed,  note: TES の CreateTask が失敗した(再送の前に yai.submit_nonce で探す)}
+  - {from: RUNNING,      to: RUNNING,        on: task_progress}
+  - {from: RUNNING,      to: RUNNING,        on: next_task_submitted}
+  - {from: RUNNING,      to: COMPLETE,       on: all_tasks_complete,  note: 全タスクが COMPLETE で、run の outputs を書けた}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: outputs_collect_failed, note: run の outputs を作れない}
+  - {from: RUNNING,      to: EXECUTOR_ERROR, on: task_executor_error, note: どれかのタスクが EXECUTOR_ERROR}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: task_system_error,   note: どれかのタスクが SYSTEM_ERROR・PREEMPTED・知らないうちに CANCELED}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: step_prepare_failed, note: 2 ステップ目以降の DRS の解決の失敗}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: task_submit_failed}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: tes_unreachable_timeout, note: TES に 30 分続けて届かない。終わりにする前に、残りのタスクへ CancelTask を出し続ける(届くまで)}
+  - {from: QUEUED,       to: CANCELED,       on: cancel_requested,    note: まだ何も出していないので、すぐ CANCELED(タスク 0 件)}
+  - {from: INITIALIZING, to: CANCELING,      on: cancel_requested,    note: 出している途中の CreateTask があれば、その結果を待ってから取り消す}
+  - {from: RUNNING,      to: CANCELING,      on: cancel_requested,    note: 全タスクに CancelTask を出す。届かなければ 10 秒ごとに出し直す}
+  - {from: CANCELING,    to: CANCELED,       on: all_tasks_terminal,  note: 出したタスク(出している途中のものを含む)が全部終わった状態}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: lost_on_restart,     note: 意図の記録が無いときだけ。記録があれば続きから(wes.md 4 節)}
+# CANCELING の間: 新しいタスクは出さない。task_* の出来事は all_tasks_terminal の判定にだけ使い、状態は変えない
+# 終わった状態・CANCELING への cancel_requested は移り方ではない: 200 で何もしない(D-020)
+# エラーで終わるとき(EXECUTOR_ERROR・SYSTEM_ERROR)も、まだ動いているタスクに CancelTask を出す(WES の外で動き続けないように)
+# UNKNOWN の連続の数は、知っている状態を 1 度でも読めたら 0 に戻す

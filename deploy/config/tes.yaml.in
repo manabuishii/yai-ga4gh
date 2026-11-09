@@ -1,0 +1,21 @@
+# yai-tes (combined tests). The API and the runner read the same file
+data_dir: /yai/var/tes/db
+files_root: /yai/var/tes/files
+work_dir: /yai/var/tes/work
+concurrency: 2
+max_runtime_seconds: 86400
+max_input_bytes: 10737418240
+limits: {max_cpu: 2, max_ram_gb: 4}
+auth:
+  mode: aai
+  issuer: https://aai.yai.test/
+  jwks_uri: https://aai.yai.test/.well-known/jwks.json
+  audience: yai-tes
+fetch:
+  allow: ["drs.yai.test:443"]
+runner:
+  kind: @TES_RUNNER@              # docker (default) or local-process (without a Docker daemon)
+  docker:
+    # no docker_host here (environment variable DOCKER_HOST, YAI_DOCKER_HOST in compose)
+    # no host_work_dir either (environment variable YAI_TES_HOST_WORK_DIR)
+    user: "@TES_JOB_USER@"        # owner of created files; "0:0" with rootless Docker (D-034)

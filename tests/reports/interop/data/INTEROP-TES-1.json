@@ -1,0 +1,95 @@
+{
+ "pair": "INTEROP-TES-1",
+ "partner": "py-tes 1.1.4 (PyPI) → yai-tes",
+ "started": "2026-10-17T06:53:57Z",
+ "steps": [
+  {
+   "name": "service-info を py-tes の型で読む",
+   "ok": true,
+   "excerpt": "{\"description\": \"yai の tes の学習用の実装。実行役: docker (D-034)\", \"environment\": \"test\", \"id\": \"test.yai.tes\", \"name\": \"yai-tes\", \"organization\": {\"name\": \"yai (personal learning project)\", \"url\": \"https://yai.test/\"}, \"storage\": [\"file:///yai/var/tes/files\", \"https://\"], \"tes_resources_backend_parameters\": [], \"type\": {\"group\": \"org.ga4gh\", \"artifact\": \"tes\", \"version\": \"1.1.0\"}, \"version\": \"0.1.0\"}"
+  },
+  {
+   "name": "CreateTask(1.1 の項目付き)",
+   "ok": true,
+   "task_id": "t01m54a70e230w7qkvh04tagyn0"
+  },
+  {
+   "name": "GetTask view=MINIMAL を py-tes の型で読む",
+   "ok": true,
+   "keys": [
+    "id",
+    "state"
+   ],
+   "has_logs": false
+  },
+  {
+   "name": "GetTask view=BASIC を py-tes の型で読む",
+   "ok": true,
+   "keys": [
+    "creation_time",
+    "description",
+    "executors",
+    "id",
+    "logs",
+    "name",
+    "resources",
+    "state",
+    "tags",
+    "volumes"
+   ],
+   "has_logs": true
+  },
+  {
+   "name": "GetTask view=FULL を py-tes の型で読む",
+   "ok": true,
+   "keys": [
+    "creation_time",
+    "description",
+    "executors",
+    "id",
+    "logs",
+    "name",
+    "resources",
+    "state",
+    "tags",
+    "volumes"
+   ],
+   "has_logs": true
+  },
+  {
+   "name": "wait → 終わりの状態",
+   "ok": true,
+   "state": "COMPLETE",
+   "stdout": "[]"
+  },
+  {
+   "name": "ListTasks page_size=1 と page_token で次のページ",
+   "ok": true,
+   "page1": [
+    "t01m54a70z4n9ss8jrkr2kr2mh0"
+   ],
+   "page2": [
+    "t01m54a70e230w7qkvh04tagyn0"
+   ],
+   "has_token": true
+  },
+  {
+   "name": "ListTasks view=FULL を py-tes の型で読む",
+   "ok": true,
+   "n": 2
+  },
+  {
+   "name": "CancelTask → CANCELED",
+   "ok": true,
+   "state": "CANCELED"
+  }
+ ],
+ "client_urls_tried": [
+  "https://tes.yai.test/ga4gh/tes/v1",
+  "https://tes.yai.test/v1",
+  "https://tes.yai.test"
+ ],
+ "finished": "2026-10-17T06:53:59Z",
+ "passed": 9,
+ "failed": 0
+}

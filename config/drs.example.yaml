@@ -1,0 +1,22 @@
+# Example config of yai-drs (design/drs.md). No secrets (the signing secret is the file url_secret_file, 0600)
+data_dir: var/drs                       # contents (content-addressed) and drs.sqlite
+public_base_url: http://127.0.0.1:8402  # root URL of the download endpoint
+hostname: drs.yai.test                  # host name of self_uri (without port, DRS-URI-02)
+max_bulk_request_length: 100
+signed_url_ttl_seconds: 3600            # D-019
+url_secret_file: var/drs/url-secret     # created at startup if missing
+test_endpoints: false                   # true enables /yai/test/clock (test clock; local tests only, D-054)
+auth:
+  mode: aai                             # aai | anonymous (provisional: everything public)
+  issuer: http://127.0.0.1:8401/
+  jwks_uri: http://127.0.0.1:8401/.well-known/jwks.json
+  audience: yai-drs
+  insecure_http_hosts: ["127.0.0.1:8401"]
+trust:                                  # trust table of the Clearinghouse (same shape as config/trust.example.yaml)
+  brokers:
+    - {iss: "http://127.0.0.1:8401/", jwks_uri: "http://127.0.0.1:8401/.well-known/jwks.json"}
+  visa_issuers:
+    - {iss: "http://127.0.0.1:8401/visa/", jku_allow: ["http://127.0.0.1:8401/visa/jwks.json"]}
+  trusted_sources: [https://yai.test/dac]
+  accepted_by: [dac]
+  insecure_http_hosts: ["127.0.0.1:8401"]

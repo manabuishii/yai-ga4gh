@@ -1,0 +1,26 @@
+{
+  "counts": {
+    "PASS": 21,
+    "FAIL": 3
+  },
+  "failed": [
+    {
+      "test": "Run test cases on the service-info endpoint; auth_type = none",
+      "case": "Service Info response schema validation",
+      "status": "FAIL",
+      "message": "Additional properties are not allowed ('drs', 'maxBulkRequestLength' were unexpected)"
+    },
+    {
+      "test": "Run test cases on the drs object info endpoint for drs id = o01m502qcjn8xn7s9e2tsy2tvt3; auth_type = bearer",
+      "case": "DRS Object Info response schema validation",
+      "status": "FAIL",
+      "message": "Additional properties are not allowed ('authorizations' was unexpected)"
+    },
+    {
+      "test": "Run test cases on the drs object info endpoint for drs id = o01m502qd22gcatyv3kxyds00qw; auth_type = passport",
+      "case": "DRS Object Info response schema validation",
+      "status": "FAIL",
+      "message": "Additional properties are not allowed ('authorizations' was unexpected)"
+    }
+  ]
+}

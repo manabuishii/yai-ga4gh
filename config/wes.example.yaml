@@ -1,0 +1,28 @@
+# Example config of yai-wes (design/wes.md). For the secret (WES client secret) only the file location is given
+data_dir: var/wes                       # wes.sqlite, per-run documents and attachments, page token secret
+public_base_url: http://127.0.0.1:8404  # root URL of task_logs_url and stdout URLs
+auth:
+  mode: aai
+  issuer: http://127.0.0.1:8401/
+  jwks_uri: http://127.0.0.1:8401/.well-known/jwks.json
+  audience: yai-wes
+  insecure_http_hosts: ["127.0.0.1:8401"]
+tes:                                    # WES calls TES with its own service identity (D-010)
+  url: http://127.0.0.1:8403/ga4gh/tes/v1
+  token_url: http://127.0.0.1:8401/token
+  client_id: yai-wes
+  client_secret_file: var/wes/client-secret   # not in git
+resolver:                               # DRS resolver (system.md section 4, steps 5 and 6)
+  passport_hosts: [drs.yai.test]        # DRS hosts that may receive Passports
+  host_override: {drs.yai.test: "http://127.0.0.1:8402"}   # unit tests only (G-DRS-01)
+  compact: {yaitest.drs: "http://127.0.0.1:8402/ga4gh/drs/v1/objects/{id}"}   # G-DRS-02
+engine:
+  poll_seconds: 2
+  nonce_search_seconds: 60
+  nonce_search_interval: 10
+  cancel_retry_seconds: 10
+  unreachable_limit_seconds: 1800
+  output_root: var/tes/files            # same place as files_root of TES (root of file:// outputs); relative paths become absolute from the start directory
+fetch:                                  # fetching workflow_url (common fetcher)
+  allow: ["drs.yai.test:443"]
+  insecure_http_hosts: ["127.0.0.1:8402"]

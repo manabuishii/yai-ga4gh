@@ -1,0 +1,16 @@
+# ページングの決まり(TES ListTasks・WES ListRuns・WES ListTasks)
+# 印(page_token)は不透明な文字列。中身は base64url(JSON) に HMAC を付けたもの。改ざんされたら 400
+# 固定するのは「どれが一覧に入るか」だけ。状態などの値は、各ページを読んだ時点のもの
+token_fields:
+  snapshot_seq: 最初のページを求めた時点の、作成の連番(DB の整数の連番 seq)の最大値。これより大きい seq は返さない(WES-LST-01。秒の時刻だと同じ秒の後の作成が混ざるので連番にした)
+  after_seq: 最後に返したものの seq。並びは seq の降順だけ(1 つの列で安定)
+  principal: 印を作った利用者の (iss, sub) の要約。別の人が使ったら 400
+  scope: 一覧の種類(tes.tasks・wes.runs・wes.tasks:<run_id>)
+  filters_hash: 絞り込みの条件の要約。条件を変えて同じ印を使ったら 400
+page_size:
+  tes: {default: 256, max_exclusive: 2048, out_of_range: 400}   # TES-LST-01
+  wes: {default: 100, max: 1000, out_of_range: 400}             # 仕様に上限なし。yai が決める(仮)
+end_of_list:
+  tes: next_page_token を出さない(G-X-04)
+  wes: next_page_token を空文字にする(WES-LST-04)
+read_end_of_list: 項目が無い・null・空文字のどれでも終わりと読む(相手が他の実装のとき)

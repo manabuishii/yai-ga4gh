@@ -1,0 +1,1154 @@
+# 4 つ(WES・TES・DRS・AAI)と人・組織の関係図の原本。docs/diagram.html はここから tools/gen_diagram.py で作る(手で直さない)。
+# 問題(G-xxx)は docs/data/spec-gaps.yaml の where で、ここの箱・矢印の ID を指す。AAI の元の技術は docs/data/aai-base.yaml。
+#
+# certainty(確かさ。図の見た目を変える):
+#   spec = 仕様で決まっている(実線)。at: [[specs/ からの相対パス, 原文の 1 行の中の文字列]] が必須(道具が原文を探す)
+#   yai  = yai が仮に決めた(点線)。decision: D-xxx が必須(docs/decisions.md に有ること)
+#   open = 誰も決めていない=曖昧(斜線+「曖昧」の札)。reason と at(仕様の外と書いてある所、など)が必須
+# 枠(boundaries)は組織。箱(boxes)は部品か人で、必ず 1 つの枠に入る。x・y・w・h は図の座標(viewBox 1080×860)。
+# 矢印(arrows): kind=call(呼び出し)/trust(信頼・責任の関係で、呼び出しではない)。sys=docs/design/system.md 4 節の番号。
+#   枠をまたぐ矢印は responsible(誰が何に責任を持つか)が必須。via は折れ点([x, y] の並び、任意)。
+#   tag_at は番号の札を置く位置(線の長さの割合、既定 0.5。札が重ならないように手で決める)。
+#   badge_at は C の行・試験の件数の札の左上を、番号の札の中心からずらす量 [dx, dy](既定は札の真下。混む所だけ手で決める)。
+# tests: docs/test-plan.md の試験(と system.md 9 節の INT-…)を箱・矢印・問題に結ぶ欄(D-032)。形は
+#   {id, plan: どこに書いた試験か, stage: 段階(test-plan の書き方のまま), targets: [箱・矢印の ID], gaps: [G-xxx],
+#    c_rows: [C-xx](E2E-10 のように C の行をまとめて持つとき), pytest: [make check で動く試験の関数名],
+#    status: 通過|一部|失敗|未実施, partial: 一部の理由, note: 任意}
+#   status は事実だけ: pytest が無いか全部が飛ばされたら未実施(D-036)、build/junit.xml で 1 つでも落ちれば失敗、飛ばされたものがあるか
+#   partial を書いたら一部、ほかは通過。tools/test_status.py が make check の最後に junit と突き合わせる(推定で通過にしない)
+#   C の行が試験を指すとき、その行の where は試験の targets に含まれていること(道具が確かめる)
+
+yai_note: >-
+  yai は学習用で、自分だけが使う(D-002)。GA4GH では別々の組織になりうる枠を、yai では 1 人の運用者がまとめて持つ。
+  枠は GA4GH の役割で描き、yai でどうしているかは各枠の「yai では」に書く。
+
+boundaries:
+  - id: B-HOME
+    name: 研究者の所属機関
+    x: 300
+    y: 20
+    w: 480
+    h: 130
+    certainty: spec
+    at:
+      - [aai/AAIConnectProfile.md, "service that provides to users an identity, authenticates it, and provides"]
+      - [aai/AAIConnectProfile.md, "eRA Commons. IdPs MAY be [Visa Assertion Sources]"]
+    role: 本人確認(IdP)と、所属・役割の主張(Visa Assertion Source)。Visa に署名するとは限らない
+    yai: yai は試験用の利用者表(alice・bob・carol)で代わりにする。所属の Visa は作らない(ControlledAccessGrants だけ)
+  - id: B-RES
+    name: 研究者(システムの利用者)
+    x: 20
+    y: 190
+    w: 240
+    h: 150
+    certainty: spec
+    at:
+      - [aai/AAIConnectProfile.md, "box \"Researcher\"  #eee"]
+    role: 研究者本人と、本人が使うクライアント(試験のコード・curl・他の実装のクライアント)
+    yai: 試験のコードがクライアント
+  - id: B-AAI
+    name: Broker の運営者
+    x: 300
+    y: 190
+    w: 480
+    h: 150
+    certainty: open
+    reason: 公式の図は「AAI」という枠に入れるだけで、どの組織が運営するか(所属機関・データを持つ機関・第三者)は決めていない。Visa Issuer と 1 つにしてもよい
+    at:
+      - [aai/AAIConnectProfile.md, "box \"AAI\""]
+      - [aai/AAIConnectProfile.md, "service that handles the responsibilities of both the Visa Issuer and"]
+    role: 利用者の本人確認を取りまとめ、Visa を集め、Passport に署名して出す
+    yai: yai-aai の試験用 Broker+Passport Issuer(認可コードの流れを持たないので Broker としては適合しない、G-AAI-09)
+  - id: B-DAC
+    name: データ利用の承認(DAC)
+    x: 820
+    y: 190
+    w: 240
+    h: 150
+    certainty: spec
+    at:
+      - [aai/AAIConnectProfile.md, "box \"Data Access Committee\""]
+      - [aai/AAIConnectProfile.md, "It is a fairly common situation that, for a single dataset, the Data Access Committee (DAC)"]
+    role: 誰がどのデータセットを使ってよいかを決め、その承認を Visa(ControlledAccessGrants、by=dac)にする
+    yai: yai-aai の試験用 Visa Issuer が、利用者表に書いた承認を署名する
+  - id: B-YAI-AUTH
+    name: API の利用許可の発行口
+    x: 300
+    y: 370
+    w: 480
+    h: 90
+    certainty: open
+    reason: WES・TES・DRS は「OAuth2 の Bearer を勧める」とだけ言い、その Bearer を誰が出すか・Passport との関係を決めていない(G-AAI-01・G-AAI-08)
+    at:
+      - [wes/workflow_execution_service.openapi.yaml, "We recommend that WES implementations use an OAuth2"]
+      - [tes/task_execution_service.openapi.yaml, "If authentication is required, we recommend that TES implementations use an OAuth2  bearer token"]
+    role: 「その API を使ってよい」を示すアクセストークンを出す(Passport の「そのデータを読んでよい」とは別)
+    yai: yai-aai が yai のアクセストークン(RFC 9068 の形、aud はサービスごと)を出す(D-008)
+  - id: B-OPS
+    name: 計算の運用者
+    x: 20
+    y: 500
+    w: 560
+    h: 340
+    certainty: open
+    reason: WES・TES を誰が運用するか(データを持つ機関の中か、研究者の所属機関か、クラウドか)は GA4GH のどの仕様も決めていない。データを持つ機関との責任の分け方も無い
+    at:
+      - [wes/workflow_execution_service.openapi.yaml, "The WES implementation is responsible for checking that a user is authorized"]
+      - [tes/task_execution_service.openapi.yaml, "Checking that a user is authorized to submit TES requests is a responsibility of TES implementations."]
+    role: ワークフローとタスクを受け付けて実行し、出力を置く
+    yai: yai-wes・yai-tes・手元のプロセスの実行役(D-024)・普通のファイル置き場(D-003)
+  - id: B-DH
+    name: データを持つ機関
+    x: 620
+    y: 500
+    w: 440
+    h: 240
+    certainty: spec
+    at:
+      - [aai/AAIConnectProfile.md, "holds a specific set of data (or its copy) and respects"]
+      - [aai/AAIConnectProfile.md, "box \"Data Holder\""]
+    role: データを置き、DAC の決定を守って、誰に渡すかを判断する(Clearinghouse)
+    yai: yai-drs(Clearinghouse の部品を中に持つ)と、署名付き URL の配信口
+
+boxes:
+  - {id: idp, name: 本人確認(IdP), boundary: B-HOME, x: 320, y: 60, w: 210, h: 56, yai: 試験用の利用者表}
+  - {id: vas-home, name: 所属・役割の主張元, boundary: B-HOME, x: 550, y: 60, w: 210, h: 56, yai: 作らない}
+  - {id: researcher, name: 研究者, boundary: B-RES, x: 40, y: 220, w: 200, h: 46, kind: person, yai: 自分}
+  - {id: client, name: クライアント, boundary: B-RES, x: 40, y: 278, w: 200, h: 46, yai: 試験のコード}
+  - {id: broker, name: Broker+Passport Issuer, boundary: B-AAI, x: 420, y: 240, w: 240, h: 56, yai: yai-aai(試験用)}
+  - {id: dac, name: DAC(承認する委員会), boundary: B-DAC, x: 840, y: 220, w: 200, h: 46, kind: person, yai: 利用者表に書いた承認}
+  - {id: visa-issuer, name: Visa Issuer, boundary: B-DAC, x: 840, y: 278, w: 200, h: 46, yai: yai-aai(試験用)}
+  - {id: at-issuer, name: アクセストークンの発行口, boundary: B-YAI-AUTH, x: 520, y: 402, w: 240, h: 46, yai: yai-aai}
+  - {id: tes, name: TES, boundary: B-OPS, x: 40, y: 560, w: 220, h: 56, yai: yai-tes}
+  - {id: wes, name: WES(+エンジン+DRS の解決役), boundary: B-OPS, x: 320, y: 560, w: 240, h: 56, yai: yai-wes}
+  - {id: runner, name: 実行役, boundary: B-OPS, x: 40, y: 670, w: 220, h: 50, yai: 手元のプロセス(D-024)}
+  - {id: outstore, name: 出力の置き場, boundary: B-OPS, x: 40, y: 770, w: 220, h: 50, yai: 普通のファイル置き場(D-003)}
+  - {id: drs, name: DRS, boundary: B-DH, x: 640, y: 560, w: 190, h: 56, yai: yai-drs}
+  - {id: ch, name: Passport Clearinghouse, boundary: B-DH, x: 850, y: 560, w: 190, h: 56, yai: yai-drs の中の部品(本命、D-004)}
+  - {id: bytes, name: バイト列の配信口, boundary: B-DH, x: 640, y: 670, w: 190, h: 50, yai: yai-drs の一部(署名付き URL)}
+
+arrows:
+  # ── GA4GH の AAI の図にある流れ(yai では作らないものも含む)
+  - id: m1
+    label: ログインを始める
+    from: researcher
+    to: client
+    kind: call
+    certainty: spec
+    at: [[aai/AAIConnectProfile.md, "user -> client : Initiates login"]]
+  - id: m2
+    label: 本人確認を IdP に頼む
+    from: broker
+    to: idp
+    kind: call
+    certainty: open
+    reason: 「OIDC・SAML などの標準の方式で」とあるだけで、方式も、IdP の結果を Broker がどこまで信じるかも決まっていない
+    at: [[aai/AAIConnectProfile.md, "assertions to a Broker using standard protocols, such as OpenID Connect, SAML or"]]
+    responsible: IdP は本人であることに責任を持つ。その結果を受け入れるかは Broker の判断
+  - id: m3
+    label: 所属・役割の主張を渡す
+    from: vas-home
+    to: broker
+    kind: call
+    certainty: open
+    reason: 主張元から Broker までの仕組みは「この仕様の範囲外」。安全の決まりを守ることだけが MUST
+    at: [[aai/AAIConnectProfile.md, "These mechanisms are unspecified by the scope of this specification except that"]]
+    responsible: 主張の中身は主張元(所属機関)。Visa に署名した者が、その Visa の中身を主張したことになる
+  - id: m4
+    label: 承認を Visa の材料に
+    from: dac
+    to: visa-issuer
+    kind: call
+    certainty: open
+    reason: DAC の決定を Visa Issuer に伝える仕組みは仕様の範囲外(主張元 → Visa Issuer の流れ)
+    at: [[aai/AAIConnectProfile.md, "These mechanisms are unspecified by the scope of this specification except that"]]
+  - id: m5
+    label: Visa を渡す
+    from: visa-issuer
+    to: broker
+    kind: call
+    certainty: open
+    reason: 公式の図そのものに「protocol unspecified」と書いてある
+    at: [[aai/AAIConnectProfile.md, "broker <-> issuer : Exchange of visas, if needed (protocol unspecified)"]]
+    responsible: Visa の署名は Visa Issuer。Broker は署名を保ったまま運ぶだけ(中身を変えられない)
+  - id: m6
+    label: DAC の決定を守る
+    from: dac
+    to: drs
+    kind: trust
+    certainty: spec
+    via: [[810, 243], [800, 480]]
+    at: [[aai/AAIConnectProfile.md, "and enforces the Data Access Committee's (DAC's) decisions on who can access it."]]
+    responsible: 決めるのは DAC、守る(執行する)のはデータを持つ機関
+  - id: m7
+    label: 信じる Broker を選ぶ
+    from: ch
+    to: broker
+    kind: trust
+    certainty: spec
+    at: [[aai/AAIConnectProfile.md, "Passport Clearinghouses MUST trust at least one Broker."]]
+    responsible: どの Broker を信じるかの危険の見積もりは Clearinghouse(データを持つ機関)の責任
+  # ── yai の 4 つを組み合わせた流れ(system.md 4 節の ①〜⑯)
+  - id: a01
+    sys: ①
+    label: ログイン → PSAT
+    tag_at: 0.4
+    from: client
+    to: broker
+    kind: call
+    certainty: spec
+    at: [[aai/AAIConnectProfile.md, "client -> broker : Request Passport-Scoped Access Token with code and client credentials"]]
+    responsible: 本人確認と PSAT の発行は Broker。PSAT をほかへ出さないのはクライアント
+    yai: 試験用ログイン(固定の利用者表)。認可コードの流れは後(G-AAI-09)
+  - id: a02
+    sys: ②
+    label: Token Exchange → Passport
+    tag_at: 0.4
+    from: client
+    to: broker
+    kind: call
+    certainty: spec
+    at: [[aai/AAIConnectProfile.md, "client -> broker : Request to exchange Passport-Scoped Access Token for Passport"]]
+    responsible: Passport に入れる Visa を選んで署名するのは Broker(Passport Issuer)
+  - id: a03
+    sys: ③
+    label: API の利用許可(AT)
+    tag_at: 0.3
+    from: client
+    to: at-issuer
+    kind: call
+    certainty: yai
+    decision: D-008
+    responsible: AT を出すのは発行口。どの API を使ってよいかは scope と aud で表す
+  - id: a04
+    sys: ④
+    label: RunWorkflow(AT+yai_passports)
+    tag_at: 0.6
+    from: client
+    to: wes
+    kind: call
+    certainty: yai
+    decision: D-009
+    responsible: 利用者は Passport を WES に預ける。WES は預かった Passport を run の間だけ持ち、ログに出さない
+  - id: a56
+    sys: ⑤⑥
+    label: POST /objects・/access(passports)
+    from: wes
+    to: drs
+    badge_at: [-26, 24]
+    kind: call
+    certainty: yai
+    decision: D-007
+    responsible: 送ってよい DRS かの判断は WES。Passport を受け入れて渡すかの判断は DRS(Clearinghouse)
+  - id: a07b
+    sys: ⑦
+    label: Passport の鍵(JWKS)
+    from: ch
+    to: broker
+    kind: call
+    certainty: spec
+    at: [[aai/AAIConnectProfile.md, "2. For Passport flows, Passport Clearinghouses MUST check the validity of the Passport."]]
+    responsible: 鍵を公開するのは Broker。どの鍵を信じるかは Clearinghouse
+  - id: a07v
+    sys: ⑦
+    label: Visa の鍵(jku)
+    from: ch
+    to: visa-issuer
+    kind: call
+    certainty: spec
+    at:
+      - [aai/AAIConnectProfile.md, "clearing -> issuer : Request public keys"]
+      - [aai/AAIConnectProfile.md, "keys to verify the signature, then it MUST verify that the `jku` is"]
+    responsible: 鍵の公開は Visa Issuer。jku を取りに行く前に許可表で確かめるのは Clearinghouse
+  - id: a08
+    sys: ⑧
+    label: 署名付き URL
+    from: drs
+    to: wes
+    badge_at: [-24, -40]
+    kind: call
+    certainty: spec
+    at: [[drs/openapi/tags/Auth.md, "server provides an `access_url` with the generated mechanism (e.g. a signed URL in the `url` field)"]]
+    responsible: URL を出すのは DRS。期限までは誰が持っていても使える(期限は仕様に欄が無い、G-DRS-10)
+  - id: a09
+    sys: ⑨
+    label: サービスの AT(client_credentials)
+    tag_at: 0.78
+    from: wes
+    to: at-issuer
+    kind: call
+    certainty: yai
+    decision: D-010
+    responsible: WES は自分のサービスの身元で TES に出す。秘密は設定ファイルに置き git に入れない
+  - id: a10
+    sys: ⑩
+    label: CreateTask(入力は署名付き URL)
+    from: wes
+    to: tes
+    badge_at: [-27, -42]
+    kind: call
+    certainty: yai
+    decision: D-010
+    responsible: タスクの持ち主は WES のサービス。利用者は tags の yai.on_behalf_of に書くだけ
+  - id: a13
+    sys: ⑬
+    label: GetTask(view=FULL)・CancelTask
+    from: wes
+    to: tes
+    badge_at: [-27, 22]
+    kind: call
+    certainty: yai
+    decision: D-010
+  - id: t1
+    label: 実行を頼む
+    from: tes
+    to: runner
+    kind: call
+    certainty: yai
+    decision: D-024
+  - id: a11
+    sys: ⑪
+    label: URL からバイト列を取る
+    from: runner
+    to: bytes
+    kind: call
+    certainty: yai
+    decision: D-007
+    responsible: URL そのものが資格情報。配信口は持ち主を区別できない。漏れたときの責任の分け方は決まっていない
+  - id: a12
+    sys: ⑫
+    label: 出力を置く
+    from: runner
+    to: outstore
+    kind: call
+    certainty: yai
+    decision: D-003
+  - id: a14
+    sys: ⑭
+    label: 状態・ログ・タスクの一覧
+    tag_at: 0.3
+    from: client
+    to: wes
+    kind: call
+    certainty: spec
+    at: [[wes/workflow_execution_service.openapi.yaml, "The WES implementation is responsible for checking that a user is authorized"]]
+    responsible: 誰に見せるかの判断は WES の実装(仕様は「実装の責任」とだけ)
+  - id: a15
+    sys: ⑮
+    label: TES を直接読む(tes_uri)
+    tag_at: 0.55
+    from: client
+    to: tes
+    kind: call
+    certainty: spec
+    at: [[tes/task_execution_service.openapi.yaml, "Checking that a user is authorized to submit TES requests is a responsibility of TES implementations."]]
+    responsible: 誰に見せるかの判断は TES の実装。WES が出したタスクを利用者が読めるかは yai が決めた(C-12)
+  - id: a16
+    sys: ⑯
+    label: DRS を直接使う
+    tag_at: 0.5
+    from: client
+    to: drs
+    kind: call
+    certainty: spec
+    at: [[drs/openapi/tags/Auth.md, "The DRS implementation is responsible for defining and enforcing an authorization policy"]]
+    responsible: 認可の方針を決めて執行するのは DRS の実装
+
+tests:
+  - id: INT-DRS-POST
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56]
+    gaps: [G-DRS-03]
+    pytest: [test_INT_DRS_POST]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-AM-BOTH
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56]
+    gaps: [G-DRS-07]
+    pytest: [test_INT_AM_BOTH]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-HEADERS-REJECT
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a08, a10]
+    gaps: [G-X-05, G-TES-05]
+    pytest: [test_INT_HEADERS_REJECT]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-TES-STORAGE
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a10, a11]
+    pytest: [test_INT_TES_STORAGE]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)。相手の TES の代わりに、中継役で yai-tes の service-info の storage から https を消した
+  - id: INT-STATE-MAP
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13]
+    gaps: [G-WES-06]
+    pytest: [test_INT_STATE_MAP]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)。yai-tes が出さない状態(PREEMPTED・PAUSED・強制の SYSTEM_ERROR)は中継役で GetTask の応答を書き換えた。UNKNOWN は tests/test_wes_engine.py
+  - id: INT-VIEW-FULL
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13]
+    gaps: [G-TES-12]
+    pytest: [test_INT_VIEW_FULL]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-LOG-URL
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13, wes]
+    gaps: [G-WES-03]
+    pytest: [test_INT_LOG_URL]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-EXIT-CODE
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13]
+    pytest: [test_INT_EXIT_CODE]
+    status: 通過
+  - id: INT-TIME-FORMAT
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13]
+    gaps: [G-X-03]
+    pytest: [test_INT_TIME_FORMAT]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: INT-TES-DELEGATE
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a09, a10]
+    gaps: [G-AAI-08]
+    pytest: [test_INT_TES_DELEGATE, test_NEG_TAG_SPOOF]
+    status: 通過
+  - id: NEG-TAG-SPOOF
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a09, a10, tes]
+    gaps: [G-AAI-08]
+    pytest: [test_NEG_TAG_SPOOF]
+    status: 通過
+  - id: INT-TES-URI-READ
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a15]
+    gaps: [G-WES-04]
+    pytest: [test_INT_TES_URI_READ]
+    status: 通過
+  - id: INT-PAGING-END
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13]
+    gaps: [G-X-04]
+    pytest: [test_INT_PAGING_END]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: WES-SI-PROTO
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a04, wes]
+    gaps: [G-X-01]
+    pytest: [test_WES_SI_01]
+    status: 通過
+    note: test_WES_SI_01 の中で service-info の supported_filesystem_protocols が drs・https であることを確かめている
+  - id: INT-DRS-HOSTNAME
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56]
+    gaps: [G-DRS-01]
+    pytest: [test_INT_DRS_HOSTNAME]
+    status: 一部
+    partial: https・443 の drs.yai.test は compose の環境だけ。compose(手元の rootless Docker)で通過、local は飛ばす
+  - id: INT-DRS-COMPACT
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56]
+    gaps: [G-DRS-02]
+    pytest: [test_INT_DRS_COMPACT, test_E2E_08]
+    status: 通過
+  - id: AAI-AUD
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56, ch]
+    gaps: [G-AAI-03]
+    pytest: [test_AAI_AUD]
+    status: 通過
+  - id: NEG-PASSPORT-NOT-LOGGED
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a04, wes]
+    gaps: [G-WES-01]
+    pytest: [test_NEG_PASSPORT_NOT_LOGGED]
+    status: 通過
+  - id: NEG-PASSPORT-NOT-IN-TES
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56, a10]
+    gaps: [G-X-01]
+    pytest: [test_NEG_PASSPORT_NOT_LOGGED, test_NEG_PASSPORT_NOT_IN_TES]
+    status: 一部
+    partial: local と compose(手元の rootless Docker)で通過。ログ・DB・許していない DRS の確かめは local だけ
+  - id: INT-CANCEL-RACE
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a13, a14]
+    gaps: [G-TES-02, G-WES-07]
+    pytest: [test_INT_CANCEL_RACE]
+    status: 通過
+  - id: AAI-EXP-OPTB
+    plan: system.md 9 節
+    stage: '2'
+    targets: [ch, a08]
+    gaps: [G-X-02]
+    pytest: [test_AAI_EXP_OPTB]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: SI-ALL
+    plan: system.md 9 節
+    stage: '2'
+    targets: [drs, tes, wes]
+    gaps: [G-X-06, G-DRS-14]
+    pytest: [test_SI_ALL]
+    status: 通過
+  - id: ERR-SHAPE
+    plan: system.md 9 節
+    stage: '2'
+    targets: [tes]
+    gaps: [G-TES-01]
+    pytest: [test_ERR_SHAPE]
+    status: 通過
+  - id: DRS-BULK-01
+    plan: system.md 9 節
+    stage: 1(単体)
+    targets: [a56]
+    gaps: [G-DRS-05, G-DRS-06]
+    pytest: [test_DRS_BULK_01]
+    status: 通過
+  - id: DRS-BULK-02
+    plan: system.md 9 節
+    stage: 1(単体)
+    targets: [a56]
+    gaps: [G-DRS-05, G-DRS-06]
+    pytest: [test_DRS_BULK_02]
+    status: 通過
+  - id: INT-FILE-SAME-RUN
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a10, tes, outstore]
+    pytest: [test_INT_FILE_SAME_RUN, test_E2E_02]
+    status: 通過
+  - id: INT-DRS-PUBLIC
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a56]
+    gaps: [G-DRS-13]
+    pytest: [test_INT_DRS_PUBLIC]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: E2E-07
+    plan: system.md 9 節
+    stage: '2'
+    targets: [a08, a11]
+    gaps: [G-DRS-10]
+    pytest: [test_E2E_07]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)。TES の同時実行 0 の代わりに実行役を止め、DRS の試験用の時計で期限を越えさせた。「期限の直前に取り始めたものは期限までに終われば COMPLETE」はまだ書いていない
+  - id: NEG-AUTH-NONE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_NONE]
+    status: 通過
+  - id: NEG-AUTH-WRONG-AUD
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_WRONG_AUD, test_NEG_AUTH_WRONG_AUD_and_KIND]
+    status: 通過
+  - id: NEG-AUTH-KIND
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_KIND]
+    status: 通過
+  - id: NEG-AUTH-ALG
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_ALG]
+    status: 通過
+  - id: NEG-AUTH-EXPIRED
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs, ch]
+    pytest: [test_NEG_AUTH_EXPIRED]
+    status: 通過
+  - id: NEG-AUTH-NOSCOPE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_NOSCOPE]
+    status: 通過
+  - id: NEG-OTHER-USER
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, wes, a14, a15]
+    pytest: [test_NEG_OTHER_USER, test_WES_LST_03, test_cancel_run]
+    status: 通過
+  - id: NEG-DRS-ACCESSID-REUSE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs]
+    pytest: [test_NEG_DRS_ACCESSID_REUSE]
+    status: 通過
+  - id: NEG-DRS-URL-TAMPER
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [bytes]
+    pytest: [test_NEG_DRS_URL_TAMPER, test_NEG_DRS_URL_TAMPER_shapes]
+    status: 通過
+  - id: NEG-DRS-URL-EXPIRED
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [bytes, a11]
+    pytest: [test_NEG_DRS_URL_EXPIRED]
+    status: 通過
+  - id: NEG-DRS-BACKDOOR
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [bytes]
+    pytest: [test_NEG_DRS_BACKDOOR]
+    status: 通過
+  - id: NEG-DRS-REVOKE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch, a08, a11]
+    pytest: [test_NEG_DRS_REVOKE]
+    status: 通過
+  - id: NEG-DRS-REVOKE-AT-ISSUER
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch, visa-issuer]
+    pytest: [test_NEG_DRS_REVOKE_AT_ISSUER]
+    status: 通過
+  - id: NEG-DRS-REASSIGN
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, m6]
+    pytest: [test_NEG_DRS_REASSIGN]
+    status: 通過
+  - id: NEG-DRS-MIXED-POLICY
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, bytes]
+    pytest: [test_NEG_DRS_MIXED_POLICY]
+    status: 通過
+  - id: NEG-PASSPORT-SEND-UNTRUSTED
+    plan: test-plan 4 節
+    stage: '2'
+    targets: [a56]
+    pytest: [test_NEG_PASSPORT_SEND_UNTRUSTED]
+    status: 一部
+    partial: local で通過(3 つの入力 = 許していないホスト・PassportAuth を名乗るが発行者が重ならない DRS・リダイレクトする DRS。偽の DRS で受信を数える)。観測役が要るので compose には置かない(local だけ、D-036)
+  - id: NEG-JKU-REDIRECT
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a07v]
+    pytest: [test_NEG_JKU_REDIRECT]
+    status: 通過
+  - id: NEG-VISA-KINDS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch]
+    pytest: [test_NEG_VISA_KINDS]
+    status: 通過
+  - id: NEG-MULTI-CRED
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, ch]
+    pytest: [test_NEG_MULTI_CRED]
+    status: 通過
+  - id: NEG-AAI-UNTRUSTED-ISS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch, m7]
+    pytest: [test_NEG_AAI_UNTRUSTED_ISS]
+    status: 通過
+  - id: NEG-AAI-KEY-ROTATION
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a07b, a07v]
+    pytest: [test_NEG_AAI_KEY_ROTATION]
+    status: 通過
+  - id: NEG-AAI-MULTI-ID
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch]
+    pytest: [test_NEG_AAI_MULTI_ID]
+    status: 通過
+  - id: NEG-AAI-OPTB
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch, a08]
+    pytest: [test_NEG_AAI_OPTB]
+    status: 通過
+  - id: NEG-PATH
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes]
+    pytest: [test_NEG_PATH]
+    status: 通過
+  - id: NEG-SSRF
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, wes, a11]
+    pytest: [test_NEG_SSRF, test_WES_RUN_03]
+    status: 一部
+    partial: WES の分は workflow_url の許していないホスト(test_WES_RUN_03)。リダイレクト・大きさ・遅さは TES と共通の取得役の試験(tests/test_fetch.py)で
+  - id: NEG-ATTACH-NAME
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a04]
+    pytest: [test_NEG_ATTACH_NAME]
+    status: 通過
+  - id: NEG-PASSPORT-BIG
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a04]
+    pytest: [test_NEG_PASSPORT_BIG]
+    status: 通過
+  - id: NEG-PASSPORT-BAD-SHAPE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a04]
+    pytest: [test_NEG_PASSPORT_BAD_SHAPE]
+    status: 通過
+  - id: NEG-SYMLINK-OUTPUT
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [runner, a12]
+    pytest: [test_NEG_SYMLINK_OUTPUT]
+    status: 通過
+  - id: NEG-IMAGE-OPTION
+    plan: test-plan 4 節
+    stage: 1(TES・WES の単体)・2(compose の Docker の実行役)
+    targets: [tes, wes, runner]
+    pytest: [test_NEG_IMAGE_OPTION, test_docker_pull_must_be_an_image_reference, test_image_comes_after_double_dash_even_if_it_starts_with_a_dash, test_NEG_IMAGE_OPTION_e2e]
+    status: 通過
+  - id: NEG-SYMLINK-STDOUT
+    plan: test-plan 4 節
+    stage: 1(単体)・2(compose の Docker の実行役)
+    targets: [runner, outstore]
+    pytest: [test_stdout_symlink_planted_by_the_container_is_not_followed, test_stdout_fifo_or_file_left_by_the_container_is_replaced_not_opened, test_replace_removes_a_symlink_by_name_and_never_writes_through_it, test_NEG_SYMLINK_STDOUT_docker]
+    status: 一部
+    partial: 本物の Docker の実行役の e2e(_docker)は compose の環境だけ。compose(手元の rootless Docker)で通過、local は飛ばす。単体は通過
+  - id: NEG-SYMLINK-MOUNT
+    plan: test-plan 4 節
+    stage: 1(単体)・2(compose の Docker の実行役)
+    targets: [runner]
+    pytest: [test_mount_set_is_fixed_by_the_declaration_not_by_what_the_container_left, test_symlinked_intermediate_directory_is_refused_even_with_replace, test_NEG_PATH_COLON, test_NEG_SYMLINK_MOUNT_docker]
+    status: 一部
+    partial: 本物の Docker の実行役の e2e(_docker)は compose の環境だけ。compose(手元の rootless Docker)で通過、local は飛ばす。単体は通過
+  - id: NEG-CANCEL-NO-COPY
+    plan: test-plan 4 節
+    stage: 1(単体・手元のプロセスの実行役)・2(compose の Docker の実行役)
+    targets: [runner, outstore, wes]
+    pytest: [test_cancel_and_time_limit_do_not_copy_logs_to_the_declared_place, test_cancel_and_time_limit_publish_nothing, test_cancel_run, test_engine_endings_drop_run_files, test_NEG_CANCEL_NO_COPY_docker]
+    status: 一部
+    partial: 本物の Docker の実行役の e2e(_docker)は compose の環境だけ。compose(手元の rootless Docker)で通過、local は飛ばす。単体は通過
+  - id: NEG-FIFO
+    plan: test-plan 4 節
+    stage: 1(単体)・2(compose の Docker の実行役)
+    targets: [runner, outstore]
+    pytest: [test_NEG_FIFO_OUTPUT, test_NEG_FIFO_SOURCE, test_NEG_FIFO_OUTPUT_docker]
+    status: 一部
+    partial: 本物の Docker の実行役の e2e(_docker)は compose の環境だけ。compose(手元の rootless Docker)で通過、local は飛ばす。単体は通過
+  - id: NEG-YAML-ALIAS
+    plan: test-plan 4 節
+    stage: 1(単体)・2(4 つまとめた試験)
+    targets: [wes]
+    pytest: [test_NEG_YAML_ALIAS, test_NEG_YAML_ALIAS_e2e]
+    status: 通過
+  - id: NEG-BODY-LIMIT
+    plan: test-plan 4 節
+    stage: 1(単体)・2(4 つまとめた試験)
+    targets: [tes, drs, at-issuer]
+    pytest: [test_NEG_BODY_LIMIT, test_NEG_DRS_BODY_CHUNKED, test_NEG_TOKEN_BODY_LIMIT, test_NEG_BODY_CHUNKED_e2e]
+    status: 通過
+  - id: NEG-REDOS-LOG
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs, broker, at-issuer]
+    pytest: [test_NEG_REDOS_LOG]
+    status: 通過
+  - id: NEG-JKU-SLOW
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [a07v]
+    pytest: [test_NEG_JKU_SLOW, test_NEG_JKU_DRIP]
+    status: 通過
+  - id: NEG-AUTH-CLIENT-ID
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes, tes, drs]
+    pytest: [test_NEG_AUTH_CLIENT_ID]
+    status: 通過
+  - id: NEG-DRS-URL-EXPIRES-MID
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [bytes, a11]
+    pytest: [test_NEG_DRS_URL_EXPIRES_MID_TRANSFER]
+    status: 通過
+  - id: NEG-CONTENT-AFTER-END
+    plan: test-plan 4 節
+    stage: 1(単体)・2(compose の Docker の実行役)
+    targets: [tes, a13]
+    pytest: [test_terminal_write_drops_input_content, test_startup_scrubs_tasks_that_ended_before, test_full_keeps_input_content_while_running, test_full_drops_input_content_when_ended, test_default_attachment_and_binary_attachment, test_NEG_CONTENT_AFTER_END_e2e]
+    status: 通過
+  - id: NEG-EMPTY-SECRET
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, tes, wes, at-issuer]
+    pytest: [test_NEG_EMPTY_SECRET, test_missing_secret_is_made_long_and_private]
+    status: 通過
+  - id: NEG-CONFORMANCE-STOPS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, runner]
+    pytest: [test_NEG_CONFORMANCE_STOPS]
+    status: 通過
+  - id: NEG-WES-RUN-LIMIT
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes]
+    pytest: [test_NEG_WES_RUN_LIMIT, test_run_limit_is_429, test_finished_watchers_leave_threads]
+    status: 通過
+  - id: NEG-TES-TASK-LIMIT
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes]
+    pytest: [test_NEG_TES_TASK_LIMIT, test_task_limit_is_429]
+    status: 通過
+  - id: NEG-URL-USERINFO
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, wes]
+    pytest: [test_NEG_URL_USERINFO]
+    status: 通過
+  - id: NEG-DISK-LIMITS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, outstore]
+    pytest: [test_NEG_DISK_LIMITS, test_publish_stops_at_max_bytes]
+    status: 通過
+  - id: NEG-OUTPUT-EXISTS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, outstore]
+    pytest: [test_NEG_OUTPUT_EXISTS]
+    status: 通過
+  - id: NEG-CONFIG-REFUSE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, tes, wes, at-issuer]
+    pytest: [test_NEG_CONFIG_REFUSE, test_NEG_CONFIG_REFUSE_auth, test_NEG_CONFIG_REFUSE_no_config_file, test_NEG_CONFIG_RANGE_EDGES]
+    status: 通過
+  - id: NEG-CONFIG-WARN
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, tes, wes]
+    pytest: [test_NEG_CONFIG_WARN, test_NEG_CONFIG_WARN_anonymous, test_NEG_CONFIG_WARN_quiet_for_loopback_and_test_names, test_startup_log_line]
+    status: 通過
+  - id: NEG-TEST-ENDPOINTS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, at-issuer]
+    pytest: [test_NEG_TEST_ENDPOINTS]
+    status: 通過
+  - id: NEG-CONFIG-SHIPPED
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, tes, wes, at-issuer]
+    pytest: [test_NEG_CONFIG_SHIPPED]
+    status: 通過
+  - id: NEG-INSECURE-HTTP-ONLY
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, wes]
+    pytest: [test_NEG_INSECURE_HTTP_ONLY]
+    status: 通過
+  - id: NEG-BODY-AUTH-FIRST
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes]
+    pytest: [test_NEG_BODY_AUTH_FIRST]
+    status: 通過
+  - id: NEG-WES-LIMIT-BEFORE-FETCH
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes]
+    pytest: [test_NEG_WES_LIMIT_BEFORE_FETCH]
+    status: 通過
+  - id: NEG-WORKFLOW-NAME
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes]
+    pytest: [test_NEG_WORKFLOW_NAME]
+    status: 通過
+  - id: NEG-VISA-COUNT
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [ch]
+    gaps: [G-AAI-10]
+    pytest: [test_NEG_VISA_COUNT]
+    status: 通過
+  - id: NEG-RAM-MIN
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, runner]
+    pytest: [test_NEG_RAM_MIN, test_NEG_RAM_MIN_argv]
+    status: 通過
+  - id: NEG-JSON-DEPTH
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes]
+    pytest: [test_NEG_JSON_DEPTH]
+    status: 通過
+  - id: NEG-CROSS-SITE
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, tes, wes, at-issuer]
+    pytest: [test_NEG_CROSS_SITE]
+    status: 通過
+  - id: NEG-LIMITS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, runner]
+    pytest: [test_NEG_LIMITS_api, test_NEG_LIMITS_docker]
+    status: 一部
+    partial: 受け付けの上限は test_NEG_LIMITS_api。実行中の既定の上限(1 CPU・2 GB・pids 256)は compose の本物のコンテナで test_NEG_LIMITS_docker(cgroup v2 の値を読む。local は飛ばす)。同時実行数の上限で QUEUED のまま待つ分はまだ
+  - id: NEG-RESTART
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, wes]
+    pytest: [test_NEG_RESTART_tes, test_E2E_09, test_restart_waits_while_search_unknown_and_finds_the_first_task, test_unreachable_count_survives_restart]
+    status: 一部
+    partial: WES の分は、本物のプロセスの再起動は E2E-09(local だけ)、差し込み点ごと(before/after_create_task)は engine の試験(rig)
+  - id: NEG-WES-SUBMIT-DUP
+    plan: test-plan 4 節
+    stage: '2'
+    targets: [a10]
+    pytest: [test_NEG_WES_SUBMIT_DUP, test_lost_response_then_restart_makes_one_task, test_restart_resubmits_with_the_saved_nonce]
+    status: 一部
+    partial: local で通過。中継役の差し込み点は「応答を落とす」と「作成を 12 秒遅らせる」(WES の待ち 10 秒より長ければ計画の 30 秒と同じ道)。再起動をまたぐ分は engine の試験(rig)。compose には置かない(local だけ、D-036)
+  - id: NEG-FILE-CROSS-TASK
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [tes, outstore]
+    pytest: [test_NEG_FILE_CROSS_TASK]
+    status: 通過
+  - id: TES-VOLUMES-2EXEC
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [runner]
+    pytest: [test_TES_VOLUMES_2EXEC]
+    status: 通過
+  - id: CWL-PARITY
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [wes]
+    pytest: [test_CWL_PARITY]
+    status: 未実施
+    partial: YAI_CWLTOOL を設定していない環境では 2 件とも飛ぶ(全部が飛ぶので未実施、D-036。前は一部としていた)
+  - id: NEG-CANCEL-RACE
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, a13]
+    pytest: [test_NEG_CANCEL_RACE_tes, test_INT_CANCEL_RACE, test_cancel_stays_canceling_while_submission_unknown]
+    status: 通過
+  - id: NEG-CANCEL-DONE
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, a14]
+    pytest: [test_NEG_CANCEL_DONE, test_cancel_run, test_INT_CANCEL_RACE]
+    status: 通過
+  - id: NEG-PAGING-SNAPSHOT
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, wes]
+    pytest: [test_NEG_PAGING_SNAPSHOT, test_WES_LST_01]
+    status: 通過
+  - id: NEG-PAGING-TAMPER
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [tes, wes]
+    pytest: [test_NEG_PAGING_TAMPER, test_NEG_PAGING_TAMPER_wes]
+    status: 通過
+  - id: NEG-SECRET-IN-LOG
+    plan: test-plan 4 節
+    stage: 1(TES・DRS・AAI の単体)・2(WES を含むもの)
+    targets: [wes, tes, drs, broker, at-issuer]
+    pytest: [test_NEG_SECRET_IN_LOG, test_NEG_SECRET_IN_LOG_e2e]
+    status: 一部
+    partial: 4 つまとめた分は local(5 つのプロセスのログと終わった TES のタスクの DB、system.md 8 節)。前段の proxy(Caddy)はアクセスログを書かない設定。compose には観測役を置かない(local だけ、D-036)
+  - id: NEG-CACHE-HEADERS
+    plan: test-plan 4 節
+    stage: '1'
+    targets: [drs, broker, at-issuer]
+    pytest: [test_NEG_CACHE_HEADERS]
+    status: 通過
+  - id: NEG-LONG-RUN
+    plan: test-plan 4 節
+    stage: '2'
+    targets: [wes, a56]
+    pytest: [test_NEG_LONG_RUN]
+    status: 一部
+    partial: local で通過。DRS の試験用の時計を Passport の期限(7200 秒)の先へ進め、2 段目の解決で DRS が断る(判定は DRS、wes.md 2 節)。compose には置かない(local だけ、D-036)
+  - id: ROB-LARGE-INPUT
+    plan: test-plan 4 節
+    stage: 後
+    targets: [a11]
+    status: 未実施
+  - id: E2E-01
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a04, a56, a08, a10, a11, a12, a15]
+    pytest: [test_E2E_01]
+    status: 通過
+  - id: E2E-02
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a10, tes, outstore]
+    pytest: [test_E2E_02]
+    status: 通過
+  - id: E2E-03
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a56, ch]
+    pytest: [test_E2E_03]
+    status: 通過
+  - id: E2E-11
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a04, a56, ch]
+    pytest: [test_E2E_11]
+    status: 通過
+  - id: E2E-04
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [runner, a13]
+    pytest: [test_E2E_04]
+    status: 通過
+  - id: E2E-05
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a12, outstore]
+    pytest: [test_E2E_05]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: E2E-06
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a14, a13]
+    pytest: [test_E2E_06, test_E2E_06_no_container_left]
+    status: 一部
+    partial: local と compose で通過。「コンテナが残らない」は本物の Docker の実行役がある compose だけで通過(local は飛ばす)
+  - id: E2E-08
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a56]
+    pytest: [test_E2E_08]
+    status: 通過
+  - id: E2E-09
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [wes]
+    pytest: [test_E2E_09]
+    status: 一部
+    partial: 手元のプロセスの環境(local)で通過。観測役(中継役・偽の DRS・プロセスの操作)が要るので compose には置かない(local だけ、D-036)
+  - id: E2E-10
+    plan: test-plan 5 節
+    stage: '2'
+    targets: [a56, a08, a10, a11, a13, wes, a09, a15, a04, ch, a14, drs, tes, outstore]
+    gaps: [G-DRS-03, G-DRS-07, G-X-05, G-TES-05, G-WES-06, G-TES-12, G-WES-03, G-X-03, G-AAI-08, G-WES-04, G-X-04, G-X-01, G-DRS-01, G-DRS-02, G-AAI-03, G-WES-01, G-TES-02, G-WES-07, G-X-02, G-X-06, G-DRS-14, G-TES-01, G-DRS-13, G-DRS-10]
+    c_rows: [C-01, C-02, C-03, C-04, C-06, C-07, C-08, C-09, C-10, C-11, C-12, C-13, C-14, C-15, C-16, C-17, C-18, C-19, C-20, C-21, C-22, C-23, C-25, C-26, C-27]
+    pytest: [test_AAI_AUD, test_AAI_EXP_OPTB, test_E2E_02, test_E2E_07, test_E2E_08, test_ERR_SHAPE, test_INT_AM_BOTH, test_INT_CANCEL_RACE, test_INT_DRS_COMPACT, test_INT_DRS_HOSTNAME, test_INT_DRS_POST, test_INT_DRS_PUBLIC, test_INT_EXIT_CODE, test_INT_FILE_SAME_RUN, test_INT_HEADERS_REJECT, test_INT_LOG_URL, test_INT_PAGING_END, test_INT_STATE_MAP, test_INT_TES_DELEGATE, test_INT_TES_STORAGE, test_INT_TES_URI_READ, test_INT_TIME_FORMAT, test_INT_VIEW_FULL, test_NEG_PASSPORT_NOT_IN_TES, test_NEG_PASSPORT_NOT_LOGGED, test_NEG_TAG_SPOOF, test_SI_ALL, test_WES_SI_01]
+    status: 一部
+    partial: C の 25 行の試験をまとめたもの。各行の状態は INT-… の行(観測役が要る行は local だけ、観測役の要らない 7 行と INT-DRS-HOSTNAME・NEG-PASSPORT-NOT-IN-TES は compose でも通過)
+  - id: CONF-TES
+    plan: test-plan 2 節
+    stage: '1'
+    targets: [tes]
+    status: 未実施
+  - id: CONF-DRS
+    plan: test-plan 2 節
+    stage: '1'
+    targets: [drs]
+    status: 未実施
+  - id: INTEROP-TES-1
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [tes, a15]
+    status: 未実施
+  - id: INTEROP-TES-2
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a10, a11]
+    status: 未実施
+  - id: INTEROP-WES-1
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [wes]
+    status: 未実施
+  - id: INTEROP-DRS-1
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a56]
+    status: 未実施
+  - id: INTEROP-AAI-1
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [ch, broker]
+    status: 未実施
+  - id: INTEROP-WES-2
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a14, a04]
+    status: 未実施
+  - id: INTEROP-WES-3
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [wes]
+    status: 未実施
+  - id: INTEROP-DRS-2
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a16, a15]
+    status: 未実施
+  - id: INTEROP-DRS-3
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a56]
+    gaps: [G-DRS-09]
+    status: 未実施
+  - id: INTEROP-AAI-2
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [visa-issuer, a07v]
+    status: 未実施
+  - id: INTEROP-EDGE
+    plan: test-plan 6 節
+    stage: '3'
+    targets: [a56, a13, a14]
+    gaps: [G-X-04, G-TES-03, G-DRS-09]
+    status: 未実施

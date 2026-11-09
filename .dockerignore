@@ -1,0 +1,13 @@
+# deploy/Dockerfile の build の context(リポジトリの根)から除くもの(D-035)。
+# 秘密・CA の鍵(deploy/local/)を像の層に入れない
+.git/
+.venv/
+.uv-python/
+var/
+build/
+deploy/local/
+deploy/.env
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+config/*.local.yaml

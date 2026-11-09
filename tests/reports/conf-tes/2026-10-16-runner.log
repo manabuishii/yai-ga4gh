@@ -1,0 +1,437 @@
+[37mProvided server: http://127.0.0.1:57271/ga4gh/tes/ version: 1.1.0[0m
+[37mProvided tags - include: [] exclude: [][0m
+[37mProvided test path: ('tests',)[0m
+[33m
+[0m
+[33m###################     Initiating Test-1 for tests/create_task_backend_parameters_negative.yml     ####################[0m
+[37mYAML file valid for Test: tests/create_task_backend_parameters_negative.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[32mCompliance Test-1 for tests/create_task_backend_parameters_negative.yml successful.[0m
+[33m
+[0m
+[33m#################################     Initiating Test-2 for tests/create_task.yml     ##################################[0m
+[37mYAML file valid for Test: tests/create_task.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[32mCompliance Test-2 for tests/create_task.yml successful.[0m
+[33m
+[0m
+[33m#############################     Initiating Test-3 for tests/list_tasks_page_size.yml     #############################[0m
+[37mYAML file valid for Test: tests/list_tasks_page_size.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-3 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL', 'page_size': 1}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-4 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL', 'page_size': 2}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-3 for tests/list_tasks_page_size.yml successful.[0m
+[33m
+[0m
+[33m#################################     Initiating Test-4 for tests/service_info.yml     #################################[0m
+[37mYAML file valid for Test: tests/service_info.yml[0m
+[37mRunning tests for sub-job-1 -> service_info[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/service-info. Query Parameters - {}[0m
+[37mGET /service-info response status code matched[0m
+[37mResponse Schema validation successful for GET /service-info[0m
+[32mCompliance Test-4 for tests/service_info.yml successful.[0m
+[33m
+[0m
+[33m#################################     Initiating Test-5 for tests/cancel_task.yml     ##################################[0m
+[37mYAML file valid for Test: tests/cancel_task.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/cancel_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> cancel_task[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503r295kyb8kt1jpd68db51:cancel. Query Parameters - {}[0m
+[37mPOST /tasks/{id}:cancel response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks/{id}:cancel[0m
+[32mCompliance Test-5 for tests/cancel_task.yml successful.[0m
+[33m
+[0m
+[33m################################     Initiating Test-6 for tests/get_task_full.yml     #################################[0m
+[37mYAML file valid for Test: tests/get_task_full.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/get_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503r29j70agc74qb5fx6jky. Query Parameters - {'view': 'FULL'}[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[32mCompliance Test-6 for tests/get_task_full.yml successful.[0m
+[33m
+[0m
+[33m###############################     Initiating Test-7 for tests/list_tasks_full.yml     ################################[0m
+[37mYAML file valid for Test: tests/list_tasks_full.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/list_tasks_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'FULL'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[32mCompliance Test-7 for tests/list_tasks_full.yml successful.[0m
+[33m
+[0m
+[33m###############################     Initiating Test-8 for tests/list_tasks_basic.yml     ###############################[0m
+[37mYAML file valid for Test: tests/list_tasks_basic.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/list_tasks_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[32mCompliance Test-8 for tests/list_tasks_basic.yml successful.[0m
+[33m
+[0m
+[33m########################     Initiating Test-9 for tests/create_task_backend_parameters.yml     ########################[0m
+[37mYAML file valid for Test: tests/create_task_backend_parameters.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[32mCompliance Test-9 for tests/create_task_backend_parameters.yml successful.[0m
+[33m
+[0m
+[33m###########################     Initiating Test-10 for tests/create_task_streamable.yml     ############################[0m
+[37mYAML file valid for Test: tests/create_task_streamable.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[31mCompliance Test-10 for tests/create_task_streamable.yml failed.[0m
+[31mException Name - Incorrect HTTP Response Status. Type - TestFailureException. Message - Response status code for POST /tasks did not match. Details - None[0m
+[33m
+[0m
+[33m#############################     Initiating Test-11 for tests/filter_task_by_tag.yml     ##############################[0m
+[37mYAML file valid for Test: tests/filter_task_by_tag.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': ['foo', 'lorem', 'task', 'baz'], 'tag_value': ['bar', 'ipsum', 'create', 'bat']}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-3 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': ['foo', 'lorem', 'baz'], 'tag_value': ['bar', 'ipsum']}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-4 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': ['foo', 'lorem', 'extra'], 'tag_value': ['bar', 'ipsum']}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-5 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': 'foo', 'tag_value': 'wrong_value'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-6 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-7 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': 'abcxyz'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-8 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-9 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'tag_key': 'tag_key_not_defined', 'tag_value': 'tag_value_not_defined'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-11 for tests/filter_task_by_tag.yml successful.[0m
+[33m
+[0m
+[33m#############################     Initiating Test-12 for tests/filter_task_by_name.yml     #############################[0m
+[37mYAML file valid for Test: tests/filter_task_by_name.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'name_prefix': 'e70dda48-ComplianceTest'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-3 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-4 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'name_prefix': 'b51f4c41'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-5 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-6 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'BASIC', 'name_prefix': 'f9327c19'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-12 for tests/filter_task_by_name.yml successful.[0m
+[33m
+[0m
+[33m#############################     Initiating Test-13 for tests/create_task_inputs.yml     ##############################[0m
+[37mYAML file valid for Test: tests/create_task_inputs.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[31mCompliance Test-13 for tests/create_task_inputs.yml failed.[0m
+[31mException Name - Incorrect HTTP Response Status. Type - TestFailureException. Message - Response status code for POST /tasks did not match. Details - None[0m
+[33m
+[0m
+[33m##############################     Initiating Test-14 for tests/get_task_minimal.yml     ###############################[0m
+[37mYAML file valid for Test: tests/get_task_minimal.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/get_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503r2d6nmk1dq2ewwkc7asc. Query Parameters - {'view': 'MINIMAL'}[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[32mCompliance Test-14 for tests/get_task_minimal.yml successful.[0m
+[33m
+[0m
+[33m############################     Initiating Test-15 for tests/filter_task_by_state.yml     #############################[0m
+[37mYAML file valid for Test: tests/filter_task_by_state.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/get_task_polling_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET polling request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503r2dk5dfz20n5e0fnf778. Query Parameters - {'view': 'MINIMAL'}[0m
+[37mUnexpected response from Polling request. Retrying...[0m
+[37mExpected response received. Polling request successful[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[37mRunning tests for sub-job-3 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL', 'state': 'COMPLETE'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-15 for tests/filter_task_by_state.yml successful.[0m
+[33m
+[0m
+[33m###############################     Initiating Test-16 for tests/get_task_basic.yml     ################################[0m
+[37mYAML file valid for Test: tests/get_task_basic.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/get_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rc7ycxrfj3gq0nmmfrz1. Query Parameters - {'view': 'BASIC'}[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[32mCompliance Test-16 for tests/get_task_basic.yml successful.[0m
+[33m
+[0m
+[33m########################     Initiating Test-17 for tests/create_task_optional_filetype.yml     ########################[0m
+[37mYAML file valid for Test: tests/create_task_optional_filetype.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[31mCompliance Test-17 for tests/create_task_optional_filetype.yml failed.[0m
+[31mException Name - Incorrect HTTP Response Status. Type - TestFailureException. Message - Response status code for POST /tasks did not match. Details - None[0m
+[33m
+[0m
+[33m###########################     Initiating Test-18 for tests/cancel_task_functional.yml     ############################[0m
+[37mYAML file valid for Test: tests/cancel_task_functional.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/cancel_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> cancel_task[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rc8rrcc3v8cgdggdev46:cancel. Query Parameters - {}[0m
+[37mPOST /tasks/{id}:cancel response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks/{id}:cancel[0m
+[37mRunning tests for sub-job-3 -> get_task[0m
+[37mSending GET polling request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rc8rrcc3v8cgdggdev46. Query Parameters - {'view': 'MINIMAL'}[0m
+[37mExpected response received. Polling request successful[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[32mCompliance Test-18 for tests/cancel_task_functional.yml successful.[0m
+[33m
+[0m
+[33m##########################     Initiating Test-19 for tests/create_task_ignore_error.yml     ###########################[0m
+[37mYAML file valid for Test: tests/create_task_ignore_error.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET polling request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rc98t4cky5tn80427vst. Query Parameters - {'view': 'FULL'}[0m
+[37mUnexpected response from Polling request. Retrying...[0m
+[37mExpected response received. Polling request successful[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-3 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-4 -> get_task[0m
+[37mSending GET polling request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rp23xwbnczwzbxf3xbd8. Query Parameters - {'view': 'FULL'}[0m
+[37mUnexpected response from Polling request. Retrying...[0m
+[37mExpected response received. Polling request successful[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-19 for tests/create_task_ignore_error.yml successful.[0m
+[33m
+[0m
+[33m###########################     Initiating Test-20 for tests/create_task_functional.yml     ############################[0m
+[37mYAML file valid for Test: tests/create_task_functional.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/get_task_polling_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> get_task[0m
+[37mSending GET polling request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks/t01m503rzv4qxw2zx777kdsx16q. Query Parameters - {'view': 'MINIMAL'}[0m
+[37mUnexpected response from Polling request. Retrying...[0m
+[37mExpected response received. Polling request successful[0m
+[37mGET /tasks/{id} response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks/{id}[0m
+[32mCompliance Test-20 for tests/create_task_functional.yml successful.[0m
+[33m
+[0m
+[33m#############################     Initiating Test-21 for tests/create_task_outputs.yml     #############################[0m
+[37mYAML file valid for Test: tests/create_task_outputs.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[31mCompliance Test-21 for tests/create_task_outputs.yml failed.[0m
+[31mException Name - Incorrect HTTP Response Status. Type - TestFailureException. Message - Response status code for POST /tasks did not match. Details - None[0m
+[33m
+[0m
+[33m############################     Initiating Test-22 for tests/list_tasks_page_token.yml     ############################[0m
+[37mYAML file valid for Test: tests/list_tasks_page_token.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-3 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL', 'page_size': 1}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[37mRunning tests for sub-job-4 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL', 'page_size': 1, 'page_token': 'eyJzbmFwc2hvdF9zZXEiOiAyMywgImFmdGVyX3NlcSI6IDIzLCAicHJpbmNpcGFsIjogImRhY2IxOWIxOGY1MGQ0MzgiLCAic2NvcGUiOiAidGVzLnRhc2tzIiwgImZpbHRlcnNfaGFzaCI6ICIxZjI3NDAyNGZmOWY2N2UxIn0.8cb29b881eba5ecaeb5c617128d3d8ff'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[37mFilter-1 passed[0m
+[32mCompliance Test-22 for tests/list_tasks_page_token.yml successful.[0m
+[33m
+[0m
+[33m#############################     Initiating Test-23 for tests/list_tasks_minimal.yml     ##############################[0m
+[37mYAML file valid for Test: tests/list_tasks_minimal.yml[0m
+[37mYAML file valid for Template: ./templates/create_task_template.yml[0m
+[37mYAML file valid for Template: ./templates/list_tasks_template.yml[0m
+[37mRunning tests for sub-job-1 -> create_task[0m
+[37mRequest Body Schema validation successful for POST /tasks[0m
+[37mSending POST request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {}[0m
+[37mPOST /tasks response status code matched[0m
+[37mResponse Schema validation successful for POST /tasks[0m
+[37mRunning tests for sub-job-2 -> list_tasks[0m
+[37mSending GET request to http://127.0.0.1:57271/ga4gh/tes/v1/tasks. Query Parameters - {'view': 'MINIMAL'}[0m
+[37mGET /tasks response status code matched[0m
+[37mResponse Schema validation successful for GET /tasks[0m
+[32mCompliance Test-23 for tests/list_tasks_minimal.yml successful.[0m
+[33m
+
+
+[0m
+[33m############################################   Compliance Testing Summary   ############################################[0m
+[33m#                                                                                                                      #[0m
+[33m#                                                   Total Tests - 23                                                   #[0m
+[33m#                   Passed - 19 (1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 18, 19, 20, 22, 23)                    #[0m
+[33m#                                             Failed - 4 (10, 13, 17, 21)                                              #[0m
+[33m#                                                    Skipped - 0 ()                                                    #[0m
+[33m#                                                                                                                      #[0m
+[33m########################################################################################################################[0m
+[33m
+
+
+[0m
+[37mWriting JSON Report on directory <repo>/tests/reports/conf-tes/2026-10-16[0m

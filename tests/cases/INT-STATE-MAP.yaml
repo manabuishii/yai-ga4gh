@@ -1,0 +1,11 @@
+# Expected results for INT-STATE-MAP (system.md C-06). Written separately from
+# docs/data/state-map-tes-to-wes.yaml
+id: INT-STATE-MAP
+terminal:          # run state when the TES task ends in this state (single-step run)
+  COMPLETE: COMPLETE
+  EXECUTOR_ERROR: EXECUTOR_ERROR
+  SYSTEM_ERROR: SYSTEM_ERROR
+  CANCELED: SYSTEM_ERROR      # CANCELED without WES canceling it (someone canceled the TES task)
+  PREEMPTED: SYSTEM_ERROR     # the minimal version does not retry
+waiting:           # the run is not finished while the task is in this state
+  PAUSED: RUNNING

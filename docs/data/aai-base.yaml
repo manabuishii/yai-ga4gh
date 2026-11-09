@@ -1,0 +1,661 @@
+# AAI 1.2・Passport 1.2 の元の技術と、GA4GH がそれを「そのまま使う(as-is)/足した(added)/変えた・制限した(changed)」の表の原本。
+# docs/diagram.html の AAI の 2 段の図と表は、ここから tools/gen_diagram.py で作る。
+# 2026-10-16 作成。元の技術の原文は写しを置かず、specs/SOURCES.yaml の base の固定した URL から取る(D-029)。
+# tech: 図の列(元の技術のまとまり)。tech_detail: 細かい名前。ref: 文書と節
+# base_at.quote: 固定した原文 base/<file>(build/specs-ext/base/)の 1 行の中にある文字列。ga4gh_at: [build/specs-ext/ からの相対パス, 1 行の中の文字列]。どちらも道具が原文を探す
+# confidence: 原文=両側の原文で確かめた / 推定=どちらかが推定(理由は note)
+# links: 関係図(diagram.yaml)のどの箱・矢印に効くか
+rows:
+- id: AB-01
+  tech: OAuth 2.0
+  tech_detail: OAuth 2.0
+  ref: RFC 6749
+  file: rfc6749.txt
+  relation: as-is
+  item: クライアントの種類(confidential / public)
+  base: クライアントは資格情報を秘密に保てるかで confidential と public の 2 種類に分かれる。
+  base_at:
+    section: '2.1'
+    quote: OAuth defines two client types, based on their ability to
+  ga4gh: 同じ 2 種類をそのまま使い、confidential は認可コードの流れを MUST、public は PKCE 付きを SHOULD とする。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - OAuth defines two client types in
+  - - aai/AAIConnectProfile.md
+    - MUST implement OAuth2 Authorization Code
+  confidence: 原文
+  links:
+  - client
+  - a01
+- id: AB-03
+  tech: OAuth 2.0
+  tech_detail: PKCE
+  ref: RFC 7636
+  file: rfc7636.txt
+  relation: as-is
+  item: 公開クライアントの PKCE
+  base: PKCE は認可コードを使う公開クライアントへの認可コード横取り攻撃を防ぐ仕組み。S256 が使えるなら S256 を使う。
+  base_at:
+    section: Abstract
+    quote: OAuth 2.0 public clients utilizing the Authorization Code Grant are
+  ga4gh: public client は Authorization Code Flow を PKCE 付きで実装 SHOULD(MUST ではない)。confidential client への PKCE は言及なし。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - Public clients (single pages apps or mobile apps) SHOULD implement Authorization Code Flow
+  confidence: 原文
+  links:
+  - a01
+- id: AB-07
+  tech: OAuth 2.0
+  tech_detail: OAuth 2.0
+  ref: RFC 6749
+  file: rfc6749.txt
+  relation: changed
+  item: アクセストークンの形式を JWS の JWT に限定
+  base: アクセストークンは通常クライアントにとって不透明な文字列で、形式は決めていない。
+  base_at:
+    section: '1.4'
+    quote: client.  The string is usually opaque to the client.  Tokens
+  ga4gh: PSAT は JWS で符号化した JWT でなければならない。ただし Clearinghouse は access token を検査するか不透明として扱うかを選べる。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The access token MUST be a JWS-encoded JWT token containing `openid` and `ga4gh_passport_v1`
+  - - aai/AAIConnectProfile.md
+    - Access tokens MUST be in JWS format
+  - - aai/AAIConnectProfile.md
+    - For access token flows, Passport Clearinghouses MUST either check the validity of the access token or treat the access
+  confidence: 原文
+  links:
+  - a01
+- id: AB-08
+  tech: OAuth 2.0
+  tech_detail: OAuth 2.0
+  ref: RFC 6749 3.3 / OIDC Core 3.1.2.1
+  file: rfc6749.txt
+  relation: added
+  item: scope ga4gh_passport_v1
+  base: scope は認可サーバーが定める、空白区切りで大文字小文字を区別する文字列の並び。値の意味は決めていない。
+  base_at:
+    section: '3.3'
+    quote: delimited, case-sensitive strings.  The strings are defined by the
+  ga4gh: scope に ga4gh_passport_v1 という値を定め、それを含む OIDC の access token を PSAT と呼ぶ。PSAT の scope クレームは openid と ga4gh_passport_v1 を含む MUST。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - including the identifier `ga4gh_passport_v1`.
+  - - aai/AAIConnectProfile.md
+    - '`scope`: REQUIRED. Includes verified scopes. MUST include `openid` and `ga4gh_passport_v1`.'
+  confidence: 原文
+  note: scope クレーム自体は RFC 8693 4.2 の定義をそのまま使う(AAI「The `scope` [Claim](#term-claim) is defined by [section 4.2]」、rfc8693.txt 762 行)。openid を含むのは OIDC Core の「OpenID Connect requests MUST contain the openid scope value」(core 1509 行)をトークンのクレームにも写したもの
+  links:
+  - a01
+- id: AB-11
+  tech: OAuth 2.0
+  tech_detail: OAuth 2.0 Bearer Token / Threat Model
+  ref: RFC 6750 1.2 / RFC 6819 5.1.6
+  file: rfc6819.txt
+  relation: changed
+  item: PSAT を渡してよい範囲
+  base: Bearer トークンは持っている者なら誰でも使える。6819 はトークンを第三者と共有しないことを対策として挙げる。
+  base_at:
+    section: 5.1.6
+    quote: Ensure that client applications do not share tokens with 3rd
+  ga4gh: PSAT はクライアントと Broker の間だけで使い、下流には Token Exchange で得た Passport を渡す流れを推奨。1.0 と違い Clearinghouse は Broker のクライアントでなくてよい。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The Passport-Scoped Access Token is only ever shared between the Client and the Broker
+  - - aai/AAIConnectProfile.md
+    - Client applications SHOULD take care to not spread the tokens to any other services that would be considered 3rd parties.
+  confidence: 原文
+  note: '6750 の該当行: rfc6750.txt 20 行「possession of a bearer token (a "bearer") can use it to get access to」。一方 AAI 678 行は Clearinghouse が access token で Token/UserInfo を呼ぶ流れも残す。yai は PSAT を 401(G-AAI-01)'
+  links:
+  - a01
+  - a02
+- id: AB-02
+  tech: OIDC
+  tech_detail: OpenID Connect Core 1.0
+  ref: OIDC Core 3.1
+  file: openid-connect-core-1_0.html
+  relation: as-is
+  item: 認可コードの流れで PSAT を得る
+  base: 認可コードをクライアントに返し、クライアントがそれを ID Token と Access Token に直接交換する。
+  base_at:
+    section: '3.1'
+    quote: The Authorization Code Flow returns an Authorization Code to the
+  ga4gh: Broker は OIDC Core に適合する OP(MUST)で、認可コードの流れで id_token と access_token(PSAT)を出す。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - will generate id_tokens and access_tokens from the
+  - - aai/AAIConnectProfile.md
+    - Broker MUST conform to the OIDC Core specification
+  confidence: 原文
+  note: yai の試験用 Broker はこの流れを持たない(G-AAI-09)
+  links:
+  - a01
+- id: AB-04
+  tech: OIDC
+  tech_detail: OpenID Connect Core 1.0
+  ref: OIDC Core 3.1.2.4
+  file: openid-connect-core-1_0.html
+  relation: added
+  item: 利用者の同意
+  base: 認証のあと、認可サーバーは RP に情報を出す前に認可の判断(同意)を得なければならない。
+  base_at:
+    section: 3.1.2.4
+    quote: obtain an authorization decision before releasing information
+  ga4gh: 3.1.2.4 に従うことを MUST とした上で、十分な粒度の同意・記憶した同意を取り消せること・記憶は opt-in に限ることを足した。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - Brokers MUST adhere to
+  - - aai/AAIConnectProfile.md
+    - it MUST only be used as an opt-in feature with
+  confidence: 原文
+  links:
+  - a01
+- id: AB-05
+  tech: OIDC
+  tech_detail: OpenID Connect Discovery 1.0
+  ref: OIDC Discovery 3・4
+  file: openid-connect-discovery-1_0.html
+  relation: changed
+  item: Discovery と jwks_uri を Broker の必須に
+  base: Discovery は OP が任意に対応するもので、対応するなら Issuer に /.well-known/openid-configuration を足した場所に JSON を置き、jwks_uri は REQUIRED。
+  base_at:
+    section: '4'
+    quote: MUST make a JSON document available at the path formed by
+  ga4gh: Broker は Discovery の対応が MUST。Clearinghouse から届く jwks_uri が必須。PSAT の iss は .well-known/openid-configuration を足して設定が取れること。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - Broker MUST support the OIDC Discovery specification
+  - - aai/AAIConnectProfile.md
+    - must have a `jwks_uri` as required that
+  - - aai/AAIConnectProfile.md
+    - '`.well-known/openid-configuration` to get spec of Broker.'
+  confidence: 原文
+  note: 取得した Discovery は「incorporating errata set 2」。OIDC 側で任意の仕組みを必須にしたので changed とした
+  links:
+  - broker
+  - a07b
+- id: AB-23
+  tech: OIDC
+  tech_detail: OpenID Connect Core 1.0
+  ref: OIDC Core 5.3・5.1.2
+  file: openid-connect-core-1_0.html
+  relation: added
+  item: UserInfo で Visa の一覧を返す
+  base: UserInfo は OAuth の保護資源で、Claims を JSON で返す(署名・暗号化を登録時に求めたら application/jwt)。標準以外の Claims も返してよい。
+  base_at:
+    section: 5.3.2
+    quote: as can additional Claims not specified there.
+  ga4gh: PSAT で呼ばれた UserInfo は ga4gh_passport_v1 クレームに Visa の配列を入れて返す MUST。JSON も JWT も MAY だが、JWT が欲しければ Token Exchange を使い UserInfo は JSON を RECOMMENDED。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The UserInfo response MUST include a `ga4gh_passport_v1`
+  - - aai/AAIConnectProfile.md
+    - or `application/jwt` response content type. It is RECOMMENDED that if desiring to return a JWT, a Token Endpoint supporting
+  confidence: 原文
+  note: 1.0 との後方互換のため(CHANGES 1.2「list of Visas is still provided as a claim value from UserInfo endpoint」)。Token Exchange を UserInfo より優先 SHOULD(AAI 484 行)
+  links:
+  - broker
+- id: AB-24
+  tech: OIDC
+  tech_detail: OpenID Connect Core 1.0
+  ref: OIDC Core 8
+  file: openid-connect-core-1_0.html
+  relation: as-is
+  item: sub と PPID
+  base: OP は利用者を表す sub を public か pairwise(RP ごとに違う値)で出せる。
+  base_at:
+    section: '8'
+    quote: Subject Identifier Types
+  ga4gh: Passport の sub は PPID でもよい。Passport の sub と中の Visa の sub は違いうるので、LinkedIdentities の Visa で結び付ける必要がありうる。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - allows the use of PPIDs (Pairwise Pseudonymous Identifiers) providing different `sub` value to each client
+  confidence: 原文
+  note: G-AAI-06
+  links:
+  - broker
+- id: AB-28
+  tech: OIDC
+  tech_detail: OpenID Connect Basic Client Implementer's Guide 1.0
+  ref: OIDC Basic(draft 47)/ RFC 6749 5.1
+  file: openid-connect-basic-1_0.html
+  relation: as-is
+  item: 秘密を含む応答のキャッシュ禁止ヘッダー
+  base: 'RFC 6749 5.1 はトークン応答に Cache-Control: no-store と Pragma: no-cache を求める。いまの OIDC Basic(draft 47)は Pragma を消し no-store だけにした。'
+  base_at:
+    section: 変更履歴 -45
+    quote: 'Removed "Pragma: no-cache" and changed "Cache-Control: no-cache, no-store" to "Cache-Control: no-store".'
+  ga4gh: 'トークン・秘密を含む応答は「OIDC-Client に従い」Cache-Control: no-cache, no-store と Pragma: no-cache を MUST で付ける。'
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - '`Cache-Control: no-cache, no-store`'
+  - - aai/AAIConnectProfile.md
+    - '`Pragma: no-cache`'
+  confidence: 原文
+  note: AAI の値は古い版の OIDC Basic のもので、今の Basic とは食い違う。RFC 6749 5.1(rfc6749.txt 2434・2436 行)の no-store+Pragma とは両立する。G-AAI-04
+  links:
+  - a01
+  - a08
+- id: AB-06
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Key
+  ref: RFC 7517 / RFC 7515 4.1.2
+  file: rfc7515.txt
+  relation: as-is
+  item: 公開鍵の配り方(JWK Set)
+  base: jku が指す先の鍵は JWK Set で符号化されていなければならない(JWK Set の形式は RFC 7517 5 節)。
+  base_at:
+    section: 4.1.2
+    quote: keys MUST be encoded as a JWK Set
+  ga4gh: 鍵は jwks_uri(Broker)と jku(Visa Issuer)で配る。JWK の形式そのものは何も変えていない。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - MUST provide the corresponding endpoint to fetch
+  - - aai/AAIConnectProfile.md
+    - must have a `jwks_uri` as required that
+  confidence: 推定
+  note: AAI の参照一覧(192-264 行)に RFC 7517 は無い。JWK は 7515 の jku と Discovery の jwks_uri を通じた間接の依存(推定)。rfc7517.txt は 5 節「JWK Set Format」を確認用に保存
+  links:
+  - a07b
+  - a07v
+- id: AB-15
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token
+  ref: RFC 7519 5.1 / RFC 8725 3.11
+  file: rfc8725.txt
+  relation: changed
+  item: Passport の typ を必須に(明示的な型付け)
+  base: 7519 では typ は OPTIONAL で、値は JWT が RECOMMENDED。8725 は新しい用途に明示的な型付け(example+jwt の形)を RECOMMENDED とする。
+  base_at:
+    section: 8725 3.11
+    quote: Explicit typing is RECOMMENDED for new uses of JWTs.
+  ga4gh: Passport の typ は REQUIRED で値は vnd.ga4gh.passport+jwt。1.0 では全部 JWT だったのを 1.2 で種類ごとに分けた。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - '`typ`: REQUIRED where the value must be `vnd.ga4gh.passport+jwt` for Passports.'
+  - - aai/CHANGES_1.2.md
+    - Passports use the value `vnd.ga4gh.passport+jwt`
+  confidence: 原文
+  note: 7519 の typ OPTIONAL は rfc7519.txt 597 行「Use of this Header Parameter is OPTIONAL.」。8725 の例は application/example+jwt で、vnd. の付け方は Passport が RFC 6838 を根拠に説明(6838 は未取得)
+  links:
+  - a02
+  - ch
+- id: AB-16
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token
+  ref: RFC 7519 5.1 / RFC 7515 4.1.9
+  file: rfc7519.txt
+  relation: added
+  item: Visa の typ は任意のまま推奨値を足した
+  base: typ は OPTIONAL、使うなら JWT が RECOMMENDED。7515 は application/ を省くことを推奨。
+  base_at:
+    section: '5.1'
+    quote: its value be "JWT" to indicate that this object is a JWT.  While
+  ga4gh: Visa の typ は OPTIONAL のまま、Visa Document Token は vnd.ga4gh.visa+jwt を RECOMMENDED、JWT も MAY。Visa Access Token は未規定(at+jwt の見込み)。
+  ga4gh_at:
+  - - passport/ga4gh_passport_v1.md
+    - OPTIONAL. The value of the `typ` header claim is RECOMMENDED to be `vnd.ga4gh.visa+jwt`
+  - - passport/ga4gh_passport_v1.md
+    - The value `JWT` marking  general JWTs MAY also be used.
+  - - aai/CHANGES_1.2.md
+    - Visas are recommended to use the value `vnd.ga4gh.visa+jwt` but allowed to use `JWT`
+  confidence: 原文
+  note: 'G-AAI-05: AAIv1.2 タグの時点では必須だったものが後の Passport 文書で任意に。8725 3.12 の「種類ごとに検査規則を排他に」は typ が任意なので typ だけでは満たせない(yai は出どころで種類を決める)'
+  links:
+  - visa-issuer
+  - ch
+- id: AB-17
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token
+  ref: RFC 7519 4.1.4 / 4.1.6
+  file: rfc7519.txt
+  relation: changed
+  item: exp・iat を必須に
+  base: exp・iat はどちらも使うかどうか任意(OPTIONAL)。exp を過ぎた JWT は受け付けてはならない。
+  base_at:
+    section: 4.1.6
+    quote: value MUST be a number containing a NumericDate value.  Use of this
+  ga4gh: PSAT・Passport では iat・exp が REQUIRED、Visa では iss・sub・iat・exp が全部 REQUIRED。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - '`iat`: REQUIRED. Time issued.'
+  - - aai/AAIConnectProfile.md
+    - '`exp`: REQUIRED. Time expired.'
+  - - aai/AAIConnectProfile.md
+    - '- `exp`: REQUIRED.'
+  - - passport/ga4gh_passport_v1.md
+    - The standard JWT payload claims `iss`, `sub`, `iat`, `exp` are all REQUIRED.
+  confidence: 原文
+  note: exp の OPTIONAL は rfc7519.txt 513 行。RFC 9068 の at+jwt も exp・iat は REQUIRED なので、PSAT についてはそれと同じ
+  links:
+  - ch
+- id: AB-18
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Signature
+  ref: RFC 7515 4.1.2
+  file: rfc7515.txt
+  relation: changed
+  item: Visa Document Token の jku を必須に
+  base: jku は JWK Set の URL を示すヘッダーで、使うかどうかは OPTIONAL。取得は TLS で、サーバーの身元を確かめる MUST。
+  base_at:
+    section: 4.1.2
+    quote: The "jku" (JWK Set URL) Header Parameter is a URI
+  ga4gh: Visa Document Token は JWS ヘッダーに jku を MUST で持ち、その先で署名鍵を出さなければならない。Visa の形では scope か jku のどちらかが MUST。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The JWS header MUST contain `jku` as specified by
+  - - passport/ga4gh_passport_v1.md
+    - One of `scope` or `jku` MUST be present as described in
+  confidence: 原文
+  note: TLS と身元確認の MUST は 7515 側(rfc7515.txt 604 行)のままで、AAI は重ねて書いていない
+  links:
+  - a07v
+  - visa-issuer
+- id: AB-19
+  tech: JWT・JWS・JWK
+  tech_detail: JWT Best Current Practices
+  ref: RFC 8725 3.10
+  file: rfc8725.txt
+  relation: changed
+  item: jku の許可表を MUST に
+  base: jku・x5u を無条件にたどると SSRF になりうるので、許可した場所の一覧と照合するなどして守る SHOULD。
+  base_at:
+    section: '3.10'
+    quote: server-side request forgery (SSRF) attacks.  Applications SHOULD
+  ga4gh: jku で鍵を取るなら、その jku が iss ごとの信頼設定に入っていることを、jku を呼ぶ前に確かめる MUST。帯域外で鍵を得ていれば jku の取得は不要。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - keys to verify the signature, then it MUST verify that the `jku` is
+  - - aai/AAIConnectProfile.md
+    - trusted issuer configuration. This check MUST be performed before
+  - - aai/AAIConnectProfile.md
+    - Fetching the public keys using the `jku` is not required if a Passport
+  confidence: 原文
+  note: AAI はこの節で RFC 8725 を名指ししていない(Security Considerations で 8725 全体を参照)。8725 の SHOULD を MUST に強めた関係は推定ではなく文言の比較
+  links:
+  - a07v
+  - ch
+- id: AB-20
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Signature
+  ref: RFC 7515 4.1.4
+  file: rfc7515.txt
+  relation: changed
+  item: PSAT の kid を必須に
+  base: kid はどの鍵で署名したかの手がかりで、使うかどうかは OPTIONAL。
+  base_at:
+    section: 4.1.4
+    quote: string.  Use of this Header Parameter is OPTIONAL.
+  ga4gh: PSAT のヘッダーでは kid が REQUIRED。Passport の節は typ しか定めず kid は必須と書かれていない。Visa の形の例では kid が角かっこ無し(必須に見える)。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - '`kid`: REQUIRED. Key ID, see'
+  - - passport/ga4gh_passport_v1.md
+    - '"kid": "<signing-key-identifier>"'
+  confidence: 原文
+  note: Visa の kid が必須かは例の書き方からの読みで、本文の規定は無い(yai は Passport・Visa で kid を必須にせず、鍵 1 つのときだけ省略を許す)
+  links:
+  - broker
+  - a01
+- id: AB-21
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Algorithms / JWT BCP
+  ref: RFC 7518 3.1 / RFC 8725 3.2
+  file: rfc7518.txt
+  relation: changed
+  item: 署名アルゴリズムを ES256・RS256 に限定
+  base: 7518 は HS256 を実装必須、RS256 を Recommended、ES256 を Recommended+ とする。8725 は用途に合う現行のアルゴリズムだけを許すことを求める。
+  base_at:
+    section: '3.1'
+    quote: '| ES256        | ECDSA using P-256 and SHA-256 | Recommended+       |'
+  ga4gh: JWT は ES256 か RS256 で署名しなければならない(HS 系・none は使えない)。1.0 は RS256 だけで、1.2 で ES256 を足した。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - JWTs MUST be issued with signatures using the `ES256` or `RS256` algorithm.
+  - - aai/CHANGES_1.2.md
+    - ECDSA-based using P-256 elliptic curve and SHA-256 hash function.
+  confidence: 原文
+  note: id_token は「形式に関知しない」(AAI 764 行)とあり、この制限が id_token に及ぶかは不明。OIDC Discovery は id_token の RS256 を MUST include、RFC 9068 は RS256 の対応を MUST
+  links:
+  - ch
+- id: AB-22
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Signature / JWT
+  ref: RFC 7519 / RFC 7515 3.1
+  file: rfc7519.txt
+  relation: changed
+  item: Passport は JWS Compact だけ(JWE を使わない)
+  base: JWT は JWS Compact Serialization でも JWE Compact Serialization でも表せる。
+  base_at:
+    section: '1'
+    quote: represented using the JWS Compact Serialization or the JWE Compact
+  ga4gh: Passport は署名した JWT なので JWS Compact Serialization で符号化する。Visa も JWS Compact。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - Passports are signed JWTs, which implies that they must be encoded using
+  - - passport/ga4gh_passport_v1.md
+    - Visas are signed JWTs encoded into strings using JWS Compact Serialization.
+  confidence: 原文
+  note: 7519 の該当行は 1 節 Introduction(193 行)
+  links:
+  - a02
+  - a56
+- id: AB-26
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token
+  ref: RFC 7519 4.1.4
+  file: rfc7519.txt
+  relation: added
+  item: Visa の期限の判定(Option A/B)と exp の意味
+  base: exp 以後の JWT は処理に受け付けてはならない。時計のずれに数分の余裕を持たせてよい。
+  base_at:
+    section: 4.1.4
+    quote: or after which the JWT MUST NOT be accepted for processing.  The
+  ga4gh: Visa の exp は新しいアクセスを与えない境目で、既存のアクセスは exp で自動的には消えない。期限付きで許す Clearinghouse は Option A(asserted+maxAuthzTTL も見る)か Option B(短命のトークン前提で exp だけ)を MUST。複数 Visa なら最小の期限。
+  ga4gh_at:
+  - - passport/ga4gh_passport_v1.md
+    - Access is NOT necessarily removed by the `exp` timestamp. Instead,
+  - - passport/ga4gh_passport_v1.md
+    - now()+requestedTTL < min(token.exp, token.ga4gh_visa_v1.asserted+maxAuthzTTL)
+  - - passport/ga4gh_passport_v1.md
+    - now()+accessTokenTTL < token.exp
+  confidence: 原文
+  note: Passport の Token Revocation 節は AAI の「Token Revocation」節へ張るが AAI 1.2 にその節は無い(G-AAI-07)。yai は Option B(PP-EXP-01)
+  links:
+  - ch
+  - a08
+- id: AB-29
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token
+  ref: RFC 7519 4.2・4.3
+  file: rfc7519.txt
+  relation: added
+  item: GA4GH クレーム(ga4gh_passport_v1・ga4gh_visa_v1)
+  base: クレーム名は自由に定めてよいが、衝突を避けるため IANA 登録か衝突しにくい名前にするべき。
+  base_at:
+    section: '4.2'
+    quote: Claim Names can be defined at will by those using JWTs.  However, in
+  ga4gh: ga4gh_passport_v1(Visa の配列)と ga4gh_visa_v1(type・asserted・value・source・by・conditions)を最上位のクレームとして足した。PSAT にはこれらを入れてはならない(MUST NOT)。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - this is the `ga4gh_passport_v1` or `ga4gh_visa_v1`
+  - - aai/AAIConnectProfile.md
+    - directly in the access token.
+  - - aai/AAIConnectProfile.md
+    - Specific implementations MAY extend
+  - - passport/ga4gh_passport_v1.md
+    - '"ga4gh_visa_v1": {'
+  confidence: 推定
+  note: IANA の JWT クレーム登録簿に ga4gh_* が載っているかは取得したファイルでは確かめていない(未確認)
+  links:
+  - ch
+- id: AB-30
+  tech: JWT・JWS・JWK
+  tech_detail: JSON Web Token / OIDC
+  ref: RFC 7519 / OIDC Core 3.1.2.1
+  file: rfc7519.txt
+  relation: added
+  item: Visa の scope に openid を入れない
+  base: JWT 自体は scope を定めない。OIDC の要求は openid scope を含まなければならない。
+  base_at:
+    section: '4.3'
+    quote: 4.3.  Private Claim Names
+  ga4gh: Visa Document Token に scope があるなら、openid を空白区切りの要素として含んではならない(OIDC の access token と取り違えないため、と読める)。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - if included, MUST NOT contain "openid" as
+  confidence: 推定
+  note: 目的(取り違え防止)は推定。AAI に理由の記述は無い。yai は openid を含めば拒否(AAI-FMT-05)
+  links:
+  - visa-issuer
+- id: AB-09
+  tech: JWT 形式の AT
+  tech_detail: JWT Profile for OAuth 2.0 Access Tokens
+  ref: RFC 9068 2.1
+  file: rfc9068.txt
+  relation: changed
+  item: PSAT の typ(at+jwt と JWT)
+  base: JWT アクセストークンは typ に at+jwt(application/at+jwt)を入れなければならない。
+  base_at:
+    section: '2.1'
+    quote: JWT access tokens MUST include this media type in the "typ" header
+  ga4gh: PSAT の typ は REQUIRED で、値は JWT か、9068 に従う場合は at+jwt。9068 は RECOMMENDED にとどめ、JWT も許す。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - It is RECOMMENDED that Passport-Scoped Access Tokens follow the JWT Profile for OAuth 2.0 Access Tokens
+  - - aai/AAIConnectProfile.md
+    - '`JWT` as '
+  - - aai/AAIConnectProfile.md
+    - 'or `at+jwt` as '
+  - - aai/CHANGES_1.2.md
+    - use the value `at+jwt`
+  confidence: 原文
+  note: CHANGES_1.2.md 90 行は「RFC9038」と書くが、リンク先は rfc9068(誤記)
+  links:
+  - a01
+- id: AB-10
+  tech: JWT 形式の AT
+  tech_detail: JWT Profile for OAuth 2.0 Access Tokens
+  ref: RFC 9068 2.2
+  file: rfc9068.txt
+  relation: changed
+  item: PSAT の aud・jti・client_id は 9068 より緩い
+  base: 9068 の JWT アクセストークンでは aud・jti・client_id・iat・exp が REQUIRED。
+  base_at:
+    section: '2.2'
+    quote: aud  REQUIRED - as defined in Section 4.1.3 of
+  ga4gh: PSAT では aud は OPTIONAL、jti は RECOMMENDED、client_id は項目に無い。9068 に従うのは RECOMMENDED なので、9068 に従わない PSAT も適合しうる。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - '`aud`: OPTIONAL. If provided, it MUST contain the OAuth Client ID of the'
+  - - aai/AAIConnectProfile.md
+    - '`jti`: RECOMMENDED. a unique identifier for the token as per'
+  confidence: 原文
+  note: jti REQUIRED は rfc9068.txt 211 行、client_id REQUIRED は 206 行
+  links:
+  - a01
+- id: AB-12
+  tech: Token Exchange
+  tech_detail: OAuth 2.0 Token Exchange
+  ref: RFC 8693 2.1
+  file: rfc8693.txt
+  relation: changed
+  item: requested_token_type を必須にし独自 URN を定義
+  base: requested_token_type は OPTIONAL。トークン種別の識別子は URI で、仕様に無い URI を使ってもよい。
+  base_at:
+    section: '2.1'
+    quote: OPTIONAL.  An identifier, as described in Section 3, for the type
+  ga4gh: requested_token_type は MUST で、値は GA4GH が定めた urn:ga4gh:params:oauth:token-type:passport。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The `requested_token_type` parameter MUST be present with the value `urn:ga4gh:params:oauth:token-type:passport`.
+  confidence: 原文
+  note: 独自 URI は 8693 3 節「Other URIs MAY be used to indicate other token types.」(616 行)の範囲内。応答の issued_token_type を何にするかは AAI に書かれていない
+  links:
+  - a02
+- id: AB-13
+  tech: Token Exchange
+  tech_detail: OAuth 2.0 Token Exchange
+  ref: RFC 8693 3
+  file: rfc8693.txt
+  relation: as-is
+  item: subject_token と subject_token_type
+  base: subject_token_type は REQUIRED。urn:ietf:params:oauth:token-type:access_token はその認可サーバーが出した access token を表す。
+  base_at:
+    section: '3'
+    quote: urn:ietf:params:oauth:token-type:access_token
+  ga4gh: subject_token は有効な PSAT、subject_token_type は urn:ietf:params:oauth:token-type:access_token(MUST)。8693 の他の任意パラメーターは受けても求めてもよい。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - The `subject_token_type` parameter value MUST be `urn:ietf:params:oauth:token-type:access_token`.
+  - - aai/AAIConnectProfile.md
+    - The `subject_token` parameter value MUST be a valid
+  confidence: 原文
+  links:
+  - a02
+- id: AB-14
+  tech: Token Exchange
+  tech_detail: OAuth 2.0 Token Exchange
+  ref: RFC 8693 2.1
+  file: rfc8693.txt
+  relation: changed
+  item: Token Exchange のクライアント認証
+  base: クライアント認証の方式と、認証なしの要求を許すかは認可サーバーの運用判断に任される。
+  base_at:
+    section: '2.1'
+    quote: unidentified clients are deployment decisions that are at the
+  ga4gh: Passport を出す Token Exchange ではクライアント認証を REQUIRED にした(RFC 6749 2.3.1 の方式を RECOMMENDED)。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - Client authentication is REQUIRED
+  confidence: 原文
+  links:
+  - a02
+- id: AB-25
+  tech: Introspection
+  tech_detail: OAuth 2.0 Token Introspection
+  ref: RFC 7662
+  file: rfc7662.txt
+  relation: changed
+  item: 失効の確かめ方(introspection を使わない)
+  base: 保護資源が認可サーバーにトークンの有効性(期限切れ・取り消し済みか)や scope を問い合わせる仕組み。
+  base_at:
+    section: '1'
+    quote: is currently active (or if it has expired or otherwise been revoked),
+  ga4gh: RFC 7662 は参照一覧にあるだけで本文に使い方が無い。Visa Document Token は失効の手続きなしで出してよく、Visa Access Token は Token/UserInfo への Access Token Polling(1 時間に 1 回まで)で確かめる。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - (https://www.rfc-editor.org/rfc/rfc7662) -- J. Richer, Ed., "OAuth 2.0 Token Introspection"
+  - - aai/AAIConnectProfile.md
+    - be an OIDC provider, and MAY provide tokens of this type without any
+  - - aai/AAIConnectProfile.md
+    - This MUST NOT be done more than once per hour (excluding any optional retries)
+  confidence: 推定
+  note: AAI 本文に introspection の語が無いことは grep で確認。Polling を introspection の代わりと見るのは推定。Visa Document Token の取り消しは exp・asserted を待つしかない(yai の aai.md 4 節と同じ読み)
+  links:
+  - ch
+- id: AB-27
+  tech: TLS
+  tech_detail: TLS 1.2
+  ref: RFC 5246(RFC 8446 で廃止)
+  file: rfc8446.txt
+  relation: as-is
+  item: TLS で守る
+  base: RFC 5246 は TLS 1.2。2018 年に RFC 8446(TLS 1.3)で廃止(Obsoleted)された。OAuth・OIDC も各エンドポイントで TLS を MUST とする。
+  base_at:
+    section: 8446 header
+    quote: 'Obsoletes: 5077, 5246, 6961'
+  ga4gh: クライアント・資源サーバー・Broker・Clearinghouse の間の情報は TLS で守る MUST。参照先は RFC 5246 のまま。
+  ga4gh_at:
+  - - aai/AAIConnectProfile.md
+    - MUST be protected using TLS.
+  - - aai/AAIConnectProfile.md
+    - (https://tools.ietf.org/html/rfc5246) - Transport Layer Security (TLS).
+  confidence: 原文
+  note: base_at は廃止を示す rfc8446.txt 9 行。rfc5246.txt も保存済み。OIDC Basic draft 47 の 6.1 節は BCP 195 を参照
+  links:
+  - a01
+  - a02
+  - a56
+  - a16

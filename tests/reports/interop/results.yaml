@@ -1,0 +1,70 @@
+# 段階 3(相互運用)の結果の原本。README.md の表と interop.d2 の矢印はこれと照らす(tools/interop_diagram_check.py)
+# status: pass(通った)/ partial(通ったが相手側の理由で項目が欠ける)/ fail(通らない)/ skip(やっていない)
+# reasons: 図の矢印に付ける理由の番号。分類は 4 つ: yai の不具合 / 相手の未対応 / 環境の不備 / 仕様の差
+date: 2026-10-17
+pairs:
+  - id: INTEROP-TES-1
+    from: pytes
+    to: tes
+    partner: py-tes 1.1.4
+    status: pass
+    score: 9/9
+    reasons: [1]
+  - id: INTEROP-TES-2
+    from: wes
+    to: funnel
+    partner: Funnel v0.11.14
+    status: pass
+    score: E2E-01 が Funnel 相手で COMPLETE
+    reasons: [2, 3]
+  - id: INTEROP-WES-1
+    from: client
+    to: sapporo
+    partner: Sapporo 2.4.0
+    status: partial
+    score: 8/10
+    reasons: [4, 5, 6]
+  - id: INTEROP-DRS-1
+    from: wes
+    to: pgdrs
+    partner: passport-playground-drs 5eb7745
+    status: pass
+    score: 5/5
+    reasons: [7]
+  - id: INTEROP-AAI-1
+    from: playground
+    to: drs
+    partner: Passport Playground (Hydra v26.2.0 + issuer bfb0232)
+    status: fail
+    score: 通らない(相手の未対応)
+    reasons: [8]
+  - {id: INTEROP-WES-2, from: wesclient, to: wes, partner: wes-service 5.0 の wes-client, status: skip, reasons: []}
+  - {id: INTEROP-WES-3, from: client, to: toil, partner: Toil 9.5.0 の WES・Galaxy v26.1.1 の WES, status: skip, reasons: []}
+  - {id: INTEROP-DRS-2, from: nextflow, to: drs, partner: nf-ga4gh 1.5.0, status: skip, reasons: []}
+  - {id: INTEROP-DRS-3, from: wes, to: indexd, partner: Gen3 indexd 2026.10・Galaxy の DRS, status: skip, reasons: []}
+  - {id: INTEROP-AAI-2, from: keycloak, to: drs, partner: keycloak-ga4gh-visa-issuer v1.0.3・REMS v2.41, status: skip, reasons: []}
+reasons:
+  1:
+    class: yai 側で直した(ユーザー決定)
+    text: 'py-tes の ServiceInfo の型が、TES の schema に無い追加の項目 `tags` を拒む(仕様は追加の項目を禁じていない)。直す前は相手の未対応で 8/9 → ユーザー決定(15:51、D-040)で yai-tes の service-info から tags を外し再試験 9/9'
+  2:
+    class: yai の不具合(直した)
+    text: 'Funnel は無い時刻を "" で返し、yai-wes の engine が ValueError で run を SYSTEM_ERROR にしていた'
+  3:
+    class: 環境の不備(直した)
+    text: 'Funnel の公式の像に docker CLI が無い(nerdctl だけ)→ 27.3.1 を足した派生の像'
+  4:
+    class: 相手の未対応
+    text: 'Sapporo は GET /runs/{id}/tasks を実装しない(400、互換表 4-1)'
+  5:
+    class: 仕様の差
+    text: 'UUID の形でない run_id は 404 でなく 400(Invalid run_id format)。仕様は無い run は 404 とだけ'
+  6:
+    class: 環境の不備(直した)
+    text: 'Sapporo の run.sh は cwltool に rootful の /var/run/docker.sock を固定で渡す → run_sh の写しで rootless のソケットに'
+  7:
+    class: 仕様の差(相手)
+    text: 'access_methods.type は https なのに access URL は http 固定(main.py)。TES の試験の設定 insecure_http_hosts で受ける'
+  8:
+    class: 相手の未対応
+    text: 'Broker(Hydra)の AT は typ=JWT で ga4gh_passport_v1 の Visa を持たず、Issuer の Visa は署名の無い JSON。Passport 1.2 の形の Passport を出す部品が無い'

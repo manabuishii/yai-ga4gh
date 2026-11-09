@@ -1,0 +1,50 @@
+# 操作ごとの認可の表(4 つの役のうち「資源と操作ごとに許すかを決める」の中身。docs/design/aai.md 5 節)
+# credential: 受ける資格情報の種類(aai.md 3 節の表の名前)。none=要らない
+# scope: AT の scope に要るもの / owner: 資源の持ち主との関係
+#   self=作った本人 / on_behalf_of=yai.on_behalf_of の本人 / service=作ったサービス本人
+# not_visible: 見えないときの応答(D-013)
+# 設計の正(D-006)。実装は実行時に読むかコードに写す。表に無い操作は拒否(403)
+tokens:
+  at_user:    {kind: yai-access-token, sub_kind: user}
+  at_service: {kind: yai-access-token, sub_kind: service}
+  passport:   {kind: passport}
+drs:
+  # DRS は「方針(policy)ごとに、受ける資格情報と条件」を持つ(レビューで組み直した)
+  # 操作 → どちらの方針で判定するか。方針の中身は下の policies
+  operations:
+    GetServiceInfo:    {policy: always}
+    OptionsObject:     {policy: always}                 # 仕様で security: [{}]
+    OptionsBulkObject: {policy: always}
+    GetObject:         {policy: object.metadata_policy}
+    PostObject:        {policy: object.metadata_policy}
+    GetBulkObjects:    {policy: object.metadata_policy, note: 1 件ずつ判定し、だめなものは unresolved に 403}
+    GetAccessURL:      {policy: object.access_policy}
+    PostAccessURL:     {policy: object.access_policy}
+    GetBulkAccessURL:  {policy: object.access_policy}
+    BlobDelivery:      {policy: object.access_policy, note: 配信口。public 以外は署名付き URL の署名だけで判定}
+  policies:
+    always:  {accept: [none, at_user, at_service, passport]}
+    public:  {accept: [none, at_user, at_service, passport], note: 資格情報が付いていても検査に失敗したら 401(壊れた資格情報を黙って無視しない)}
+    bearer:  {accept: [at_user, at_service], require: {aud: yai-drs, scope_any: [drs.read, drs.access]}}
+    dataset: {accept: [passport], require: {visa: ControlledAccessGrants, value_equals: object.dataset}, note: AT では通らない(利用者の Visa が要る、C-19)}
+  multiple_credentials: >-
+    1 つの要求に複数の資格情報(Bearer と passports、複数の Passport)が来たら、それぞれを別々に検査し、
+    どれか 1 つだけで方針を満たせば許す。別々の資格情報の属性(Visa など)を合わせて判定しない。
+    どれかの検査が失敗したら(壊れている・信頼しない)要求全体を 401(PP-CH-01)
+tes:
+  GetServiceInfo:   {credential: [none]}
+  CreateTask:       {credential: [at_user, at_service], scope: [tes.submit], note: "yai. で始まる tags は at_service かつ scope tes.delegate のときだけ"}
+  ListTasks:        {credential: [at_user, at_service], scope: [tes.read], owner: [self, on_behalf_of], note: 見えるものだけを返す}
+  GetTask:          {credential: [at_user, at_service], scope: [tes.read], owner: [self, on_behalf_of], not_visible: 404}
+  CancelTask:       {credential: [at_user, at_service], scope: [tes.cancel], owner: [self], not_visible: 404, visible_but_not_owner: 403}
+wes:
+  GetServiceInfo:   {credential: [none]}
+  ListRuns:         {credential: [at_user], scope: [wes.read], owner: [self]}
+  RunWorkflow:      {credential: [at_user], scope: [wes.run], note: multipart の yai_passports は任意(dataset の方針の入力があるときに要る)}
+  GetRunLog:        {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404}
+  GetRunStatus:     {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404}
+  ListTasks:        {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404}
+  GetTask:          {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404}
+  CancelRun:        {credential: [at_user], scope: [wes.cancel], owner: [self], not_visible: 404}
+  GetTaskStdout:    {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404, note: yai 独自(C-08)}
+  GetTaskStderr:    {credential: [at_user], scope: [wes.read], owner: [self], not_visible: 404, note: yai 独自(C-08)}

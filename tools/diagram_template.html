@@ -1,0 +1,614 @@
+<title>yai 関係図</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<!-- 生成物: tools/gen_diagram.py が docs/data/*.yaml とこのテンプレートから作る。手で直さない -->
+<style>
+/* 配置: 上に数と凡例、中央に関係図(広い画面では右に詳細)、下に問題の一覧・AAI の 2 段・試験の欄 */
+:root {
+  --bg: #f4f6f9; --panel: #ffffff; --fg: #18202b; --muted: #586476; --line: #c4ccd8;
+  --accent: #2b55c9; --bound: #eef1f6; --hatch: #d9c48f; --vague: #a86d00; --trust: #7a5bb5;
+  --k0: #c23b2b; --k1: #c27c00; --k2: #6f63a3; --k3: #11806f;
+  --r-as-is: #5e6b7e; --r-added: #1d7a52; --r-changed: #b4471f;
+  --sel: #2b55c9;
+  --policy: #0e7490; --impl: #1d7a3e; --i-oss: #1d7a3e; --i-com: #9a3412; --i-coss: #6d28d9;
+  --v0: #c4262e; --v1: #a86d00; --v2: #2c7a3a; --vt: #6b7687;
+  --font: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151b; --panel: #19202a; --fg: #e3e8ef; --muted: #9aa5b4; --line: #3a4554;
+  --accent: #86a3ff; --bound: #1b232e; --hatch: #5d4c22; --vague: #e3a63c; --trust: #b9a0ee;
+  --k0: #f07a69; --k1: #e8a93a; --k2: #a99ce0; --k3: #4cc3ae;
+  --r-as-is: #9aa6b8; --r-added: #5cc995; --r-changed: #f08a5d; --sel: #86a3ff;
+  --v0: #ff7b83; --v1: #e8b04a; --v2: #6cc77d; --vt: #8f9aab; --policy: #4fc3d9; --impl: #6cd38f; --i-oss: #3fa565; --i-com: #e0794a; --i-coss: #a98bf0; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #11151b; --panel: #19202a; --fg: #e3e8ef; --muted: #9aa5b4; --line: #3a4554;
+  --accent: #86a3ff; --bound: #1b232e; --hatch: #5d4c22; --vague: #e3a63c; --trust: #b9a0ee;
+  --k0: #f07a69; --k1: #e8a93a; --k2: #a99ce0; --k3: #4cc3ae;
+  --r-as-is: #9aa6b8; --r-added: #5cc995; --r-changed: #f08a5d; --sel: #86a3ff;
+  --v0: #ff7b83; --v1: #e8b04a; --v2: #6cc77d; --vt: #8f9aab; --policy: #4fc3d9; --impl: #6cd38f; --i-oss: #3fa565; --i-com: #e0794a; --i-coss: #a98bf0; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.65; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 28px; }
+h1 { font-size: 1.6rem; margin: 0; text-wrap: balance; }
+h2 { font-size: 1.2rem; margin: 0 0 10px; text-wrap: balance; }
+h3 { font-size: 1rem; margin: 0; }
+p { margin: 0; }
+.lead { color: var(--muted); max-width: 70ch; }
+code, .id { font-family: var(--mono); font-size: .88em; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; font-variant-numeric: tabular-nums; }
+.stats div { display: grid; }
+.stats b { font-size: 1.35rem; }
+.stats span { color: var(--muted); font-size: .8rem; letter-spacing: .04em; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; font-size: .85rem; color: var(--muted); }
+.legend svg { vertical-align: middle; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  border-radius: 999px; padding: 3px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.chip:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+#map { display: block; width: 100%; min-width: 760px; height: auto; }
+#aai-map { display: block; width: 100%; min-width: 640px; height: auto; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow: auto; min-width: 0; }
+@media (max-width: 1000px) { .panel { position: static; max-height: none; } }
+.panel h3 { font-size: 1.05rem; margin-bottom: 6px; }
+.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: .88rem; margin: 10px 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pill { display: inline-block; border-radius: 999px; padding: 0 9px; font-size: .78rem; border: 1px solid currentColor; white-space: nowrap; }
+.pill.c-spec { color: var(--fg); }
+.pill.c-yai { color: var(--accent); border-style: dashed; }
+.pill.c-open { color: var(--vague); background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--hatch) 55%, transparent) 4px 6px); }
+.gap { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 4px; font-size: .88rem; min-width: 0; }
+.gap .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gap .lab { color: var(--muted); font-size: .78rem; letter-spacing: .04em; }
+.gap div { overflow-wrap: anywhere; }
+.k0 { color: var(--k0); } .k1 { color: var(--k1); } .k2 { color: var(--k2); } .k3 { color: var(--k3); }
+.bg0 { background: var(--k0); } .bg1 { background: var(--k1); } .bg2 { background: var(--k2); } .bg3 { background: var(--k3); }
+.list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0 24px; align-items: start; }
+.list .gap { cursor: pointer; }
+.list .gap:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 400; font-size: .78rem; letter-spacing: .04em; white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+.tablewrap table { min-width: 860px; }
+.note { font-size: .85rem; color: var(--muted); }
+section { min-width: 0; }
+
+/* 図 */
+svg text { fill: var(--fg); font-family: var(--font); }
+.bound > rect:first-child { fill: var(--bound); stroke: var(--line); stroke-width: 1.4; }
+.bound.c-yai > rect:first-child { stroke-dasharray: 7 4; stroke: var(--accent); }
+.bound.c-open > rect:first-child { fill: url(#hatch); stroke: var(--vague); stroke-dasharray: 3 3; }
+.hatch-bg { fill: var(--bound); } .hatch-line { stroke: var(--hatch); stroke-width: 3; }
+.bound-name { font-size: 13px; font-weight: 700; fill: var(--muted); }
+.vague-tag { fill: var(--panel); stroke: var(--vague); }
+.vague-text { font-size: 11px; fill: var(--vague); text-anchor: middle; font-weight: 700; }
+.box > rect { fill: var(--panel); stroke: var(--fg); stroke-width: 1.3; }
+.box.person > rect { stroke-width: 1.8; }
+.box-name { font-size: 13px; font-weight: 700; text-anchor: middle; }
+.box-yai { font-size: 10.5px; text-anchor: middle; fill: var(--muted); }
+.kdot { stroke: var(--panel); stroke-width: 2; }
+.kdot.k0 { fill: var(--k0); } .kdot.k1 { fill: var(--k1); } .kdot.k2 { fill: var(--k2); } .kdot.k3 { fill: var(--k3); }
+.kdot-text { font-size: 11px; font-weight: 700; text-anchor: middle; fill: var(--panel); }
+.arrow .line { fill: none; stroke: var(--fg); stroke-width: 1.5; }
+.arrow .hit { fill: none; stroke: transparent; stroke-width: 14; }
+.arrow.c-yai .line { stroke: var(--accent); stroke-dasharray: 7 4; }
+.arrow.c-open .line { stroke: var(--vague); stroke-dasharray: 2 3; stroke-width: 2.2; }
+.arrow.k-trust .line { stroke: var(--trust); stroke-width: 1.2; }
+.head { fill: context-stroke; }
+.arrow .head, marker path { fill: var(--muted); }
+.tag { fill: var(--panel); stroke: var(--line); }
+.arrow.c-open .tag { stroke: var(--vague); }
+.arrow.k-trust .tag { stroke: var(--trust); }
+.tag-text { font-size: 11.5px; text-anchor: middle; font-family: var(--mono); }
+.tag-text.sys { font-size: 14px; font-family: var(--font); }
+.count { fill: var(--fg); }
+.count-text { font-size: 10.5px; font-weight: 700; text-anchor: middle; fill: var(--panel); }
+.duty { fill: var(--panel); stroke: var(--fg); stroke-width: 1.4; }
+[data-kind="box"], [data-kind="arrow"], [data-kind="boundary"], [data-kind="tech"], [data-kind="rel"] { cursor: pointer; }
+.sel > rect, .sel .line { stroke: var(--sel) !important; stroke-width: 3 !important; }
+.dim { opacity: .18; }
+.layer { fill: var(--bound); stroke: var(--line); }
+.layer-name { font-size: 12px; font-weight: 700; fill: var(--muted); }
+.tech > rect { fill: var(--panel); stroke: var(--fg); }
+.tech-name { font-size: 12.5px; font-weight: 700; text-anchor: middle; }
+.tech-ref { font-size: 10px; text-anchor: middle; fill: var(--muted); font-family: var(--mono); }
+.rel > rect { fill: var(--panel); stroke-width: 1.5; }
+.rel.r-as-is > rect { stroke: var(--r-as-is); } .rel.r-added > rect { stroke: var(--r-added); } .rel.r-changed > rect { stroke: var(--r-changed); }
+.rel-text { font-size: 11px; text-anchor: middle; }
+.r-as-is .rel-text { fill: var(--r-as-is); } .r-added .rel-text { fill: var(--r-added); } .r-changed .rel-text { fill: var(--r-changed); }
+.rel-line { stroke: var(--line); stroke-dasharray: 2 3; }
+.rtag { font-size: .78rem; border-radius: 999px; padding: 0 8px; border: 1px solid currentColor; white-space: nowrap; }
+.rtag.r-as-is { color: var(--r-as-is); } .rtag.r-added { color: var(--r-added); } .rtag.r-changed { color: var(--r-changed); }
+/* C の行(判定)と試験 */
+.cb rect { stroke: var(--panel); stroke-width: 1.5; }
+.cb.v0 rect { fill: var(--v0); } .cb.v1 rect { fill: var(--v1); } .cb.v2 rect { fill: var(--v2); } .cb.vt rect { fill: var(--vt); }
+.cb-text { font-size: 10.5px; font-weight: 700; text-anchor: middle; fill: var(--panel); font-family: var(--font); }
+.ng > rect, .ng .line { stroke: var(--v0) !important; stroke-width: 3 !important; }
+.vd { display: inline-block; border-radius: 999px; padding: 0 9px; font-size: .78rem; color: var(--panel); white-space: nowrap; font-weight: 700; }
+.vd.v0 { background: var(--v0); } .vd.v1 { background: var(--v1); } .vd.v2 { background: var(--v2); }
+.ts { display: inline-block; border-radius: 999px; padding: 0 9px; font-size: .78rem; border: 1px solid currentColor; white-space: nowrap; }
+.ts.s-通過 { color: var(--v2); } .ts.s-一部 { color: var(--v1); } .ts.s-失敗 { color: var(--v0); font-weight: 700; } .ts.s-未実施 { color: var(--vt); border-style: dashed; }
+.crow { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 4px; font-size: .88rem; min-width: 0; cursor: pointer; }
+.crow:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.crow .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crow .lab { color: var(--muted); font-size: .78rem; letter-spacing: .04em; }
+.crow div { overflow-wrap: anywhere; }
+.crow details summary { color: var(--muted); font-size: .8rem; cursor: pointer; }
+.trow { cursor: pointer; }
+.trow:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+#test-table { min-width: 560px; }
+/* TRE の層(tools/gen_tre.py) */
+.pill.c-policy { color: var(--policy); border-style: dashed; }
+.arrow.c-policy .line { stroke: var(--policy); stroke-dasharray: 10 3 2 3; stroke-width: 1.8; }
+.bound.c-policy > rect:first-child { stroke: var(--policy); stroke-dasharray: 10 3 2 3; }
+.box.c-policy > rect { stroke: var(--policy); stroke-dasharray: 10 3 2 3; }
+.box.c-open > rect { fill: url(#tre-hatch); stroke: var(--vague); stroke-dasharray: 3 3; }
+#tre-map .bound.c-open > rect:first-child { fill: url(#tre-hatch); }
+.box.c-yai > rect { stroke: var(--accent); stroke-dasharray: 7 4; }
+.box.ref > rect { stroke-width: 2.2; }
+.bound.new > rect:first-child { stroke-width: 2.2; }
+#tre-map { display: block; width: 100%; min-width: 760px; height: auto; }
+.im rect { stroke: var(--panel); stroke-width: 1.2; }
+.im-oss rect { fill: var(--i-oss); } .im-commercial rect { fill: var(--i-com); } .im-commercial-oss rect { fill: var(--i-coss); }
+.im-text { font-size: 9.5px; font-weight: 700; text-anchor: middle; fill: var(--panel); font-family: var(--font); }
+.ib { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: .76rem; color: var(--panel); font-weight: 700; white-space: nowrap; }
+.ib.oss { background: var(--i-oss); } .ib.commercial { background: var(--i-com); } .ib.commercial-oss { background: var(--i-coss); }
+.lp { display: inline-block; border-radius: 999px; padding: 0 9px; font-size: .78rem; border: 1px solid currentColor; white-space: nowrap; }
+.lp.both { color: var(--fg); } .lp.official { color: var(--muted); border-style: dashed; } .lp.impl { color: var(--impl); font-weight: 700; } .lp.none { color: var(--vague); }
+.sf { display: inline-block; border-radius: 4px; padding: 0 6px; font-size: .76rem; background: color-mix(in srgb, var(--accent) 12%, transparent); white-space: nowrap; }
+#tre-sec .off { opacity: .1; pointer-events: none; }
+#tre-sec[data-view="C"] [data-layer="impl"] .line { stroke: var(--impl) !important; stroke-width: 2.4; }
+#tre-sec[data-view="C"] [data-layer="impl"] > rect { stroke: var(--impl) !important; stroke-width: 2.4; }
+#tre-sec[data-view="C"] [data-layer="official"] .line { stroke: var(--muted) !important; }
+#tre-sec[data-view="C"] [data-layer="official"] > rect { stroke: var(--muted) !important; stroke-dasharray: 2 2; }
+#tre-sec[data-view="C"] [data-kind="tre-box"][data-layer="none"] > rect { fill: url(#tre-hatch); }
+.views { display: flex; flex-wrap: wrap; gap: 8px; }
+.views .chip[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+#tre-sec[data-view="A"] .im { display: none; }
+.pill.tre-heavy { color: var(--v0); font-weight: 700; }
+.tre-c { display: none; } #tre-sec[data-view="C"] .tre-c { display: inline-flex; }
+@media (prefers-reduced-motion: no-preference) { .dim, .sel > rect { transition: opacity .15s; } }
+</style>
+
+<div class="wrap">
+<header style="display:grid;gap:10px">
+  <h1>yai 関係図</h1>
+  <p style="font-weight:700">WES・TES・DRS・AAI と、研究者・所属機関・DAC・データを持つ機関</p>
+  <p class="lead">4 つの API が、研究者・所属機関・DAC・データを持つ機関のどこにあり、どの矢印で誰が責任を持つかを描いた図です。箱・矢印・枠を押すと、確かさ・出典・その場所の仕様の問題(食い違い・漏れ・古い・組み合わせ)が出ます。</p>
+  <p class="note">{{YAI_NOTE}}</p>
+  <div class="stats">
+    <div><b>{{N_BOUND}}</b><span>組織の枠</span></div>
+    <div><b>{{N_BOX}}</b><span>箱</span></div>
+    <div><b>{{N_ARROW}}</b><span>矢印</span></div>
+    <div><b>{{N_CROSS}}</b><span>枠をまたぐ矢印</span></div>
+    <div><b>{{N_GAP}}</b><span>仕様の問題</span></div>
+    <div><b>{{N_SPEC}} / {{N_YAI}} / {{N_OPEN}}</b><span>枠+矢印の確かさ 仕様 / yai / 曖昧</span></div>
+    <div><b>{{N_C}}</b><span>矛盾の確かめ表の行</span></div>
+    <div><b><span style="color:var(--v0)">{{N_NG}}</span> / {{N_WARN}} / {{N_OK}}</b><span>判定 合わない / 注意 / 合う</span></div>
+    <div><b>{{N_TEST}}</b><span>図に結んだ試験</span></div>
+    <div><b>{{N_T_PASS}} / {{N_T_PART}} / {{N_T_FAIL}} / {{N_T_NONE}}</b><span>試験 通過 / 一部 / 失敗 / 未実施</span></div>
+  </div>
+</header>
+
+<section aria-label="凡例と絞り込み" style="display:grid;gap:10px">
+  <div class="legend">
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--fg);stroke-width:1.5"/></svg> 仕様で決まっている</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--accent);stroke-width:1.5;stroke-dasharray:7 4"/></svg> yai が仮に決めた(D 番号)</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--vague);stroke-width:2.2;stroke-dasharray:2 3"/></svg> 曖昧(誰も決めていない。枠は斜線)</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--trust);stroke-width:1.2"/></svg> 信頼・責任の関係(呼び出しではない)</span>
+    <span><svg width="14" height="14"><path d="M7,1 l6,6 l-6,6 l-6,-6 z" style="fill:var(--panel);stroke:var(--fg);stroke-width:1.4"/></svg> 責任分界点(矢印が枠を出る所)</span>
+    <span><span class="vd v0">C2 試3</span> C の行の数と試験の数。色は一番悪い判定(<span style="color:var(--v0)">合わない</span>・<span style="color:var(--v1)">注意</span>・<span style="color:var(--v2)">合う</span>、灰色は試験だけ)</span>
+  </div>
+  <div class="chips" role="group" aria-label="問題の種類で絞る">
+    <button class="chip" id="f-k0" data-k="食い違い" aria-pressed="false"><span class="dot bg0"></span>食い違い</button>
+    <button class="chip" id="f-k1" data-k="漏れ" aria-pressed="false"><span class="dot bg1"></span>漏れ</button>
+    <button class="chip" id="f-k2" data-k="古い" aria-pressed="false"><span class="dot bg2"></span>古い</button>
+    <button class="chip" id="f-k3" data-k="組み合わせ" aria-pressed="false"><span class="dot bg3"></span>組み合わせ</button>
+    <button class="chip" id="f-open" data-open="1" aria-pressed="false">曖昧だけ</button>
+    <button class="chip" id="f-ng" aria-pressed="false"><span class="dot" style="background:var(--v0)"></span>「合わない」の場所だけ</button>
+    <button class="chip" id="f-tre" aria-pressed="false"><span class="pill tre-heavy">TRE で重い</span>問題だけ</button>
+  </div>
+</section>
+
+<div class="main">
+  <div class="scroll" id="map-wrap">
+{{SVG}}
+  </div>
+  <aside class="panel" id="panel" aria-live="polite">
+    <h3>箱・矢印・枠を押してください</h3>
+    <p class="note">ここに確かさ・責任・出典・問題と、矛盾の確かめ表の行(C-01〜)・試験が出ます。下の一覧の問題・C の行・試験を押すと、その場所が図で光ります。</p>
+  </aside>
+</div>
+
+<section id="tre-sec" data-view="C" style="display:grid;gap:12px">
+  <h2>TRE の層(GA4GH の他の標準と TRE 全体)</h2>
+  <p class="lead">上の 4 つの図の箱(太枠、「4 つの図にもある」)に、TRE(信頼できる研究環境)として要る箱・矢印と、連合の調整役の枠を足した図です。<b>A 公式だけ</b>=仕様・方針の文書に書いてあるもの、<b>B 実装から</b>=実装(OSS のコード・商用の文書)で動いていそうなもの、<b>C 重ね合わせ</b>=両方を重ねて「両方にある/公式だけ/実装だけ/どちらにも無い」を色で分けたもの。A では、誰が持つか決まっていない枠(計算の運用者・Broker の運営者・連合の調整役)は出ません(公式に決まっていないため)。箱・矢印・枠を押すと、確かさ・持ち主・出典・実装の根拠・TRE の問題が出ます。</p>
+  <p class="note">{{TRE_NOTE}}</p>
+  <div class="stats">
+    <div><b>{{T_BOUND}}</b><span>枠</span></div>
+    <div><b>{{T_BOX}}</b><span>箱</span></div>
+    <div><b>{{T_ARROW}}</b><span>矢印</span></div>
+    <div><b>{{T_CERT}}</b><span>確かさ 仕様 / 方針だけ / yai / 曖昧</span></div>
+    <div><b>{{T_LAYER}}</b><span>両方 / 公式だけ / 実装だけ / どちらにも無い</span></div>
+    <div><b>{{T_IMPLS}} / {{T_EV}}</b><span>実装 / 根拠の行</span></div>
+    <div><b>{{T_STD}}</b><span>図に入れた標準</span></div>
+    <div><b>{{T_PROB}} / {{T_HEAVY}}</b><span>TRE の問題 / TRE で重くなる G</span></div>
+  </div>
+  <div class="views" role="group" aria-label="図の見方を切り替える">
+    <button class="chip" data-view="A" aria-pressed="false">A 公式だけ</button>
+    <button class="chip" data-view="B" aria-pressed="false">B 実装から(動いていそう)</button>
+    <button class="chip" data-view="C" aria-pressed="true">C 重ね合わせ</button>
+  </div>
+  <div class="legend">
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--fg);stroke-width:1.5"/></svg> 仕様で決まっている</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--policy);stroke-width:1.8;stroke-dasharray:10 3 2 3"/></svg> 方針だけ(指針・推奨はあるが手順・形式は無い)</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--accent);stroke-width:1.5;stroke-dasharray:7 4"/></svg> yai が仮に決めた</span>
+    <span><svg width="40" height="10"><line x1="0" y1="5" x2="40" y2="5" style="stroke:var(--vague);stroke-width:2.2;stroke-dasharray:2 3"/></svg> 曖昧(箱・枠は斜線)</span>
+    <span><svg width="14" height="14"><path d="M7,1 l6,6 l-6,6 l-6,-6 z" style="fill:var(--panel);stroke:var(--fg);stroke-width:1.4"/></svg> 責任分界点</span>
+    <span><span class="ib oss">O</span> OSS(コードで確かめた) <span class="ib commercial">商</span> 商用(文書だけ・推定) <span class="ib commercial-oss">商O</span> 商用の OSS 版</span>
+    <span class="tre-c"><span class="lp impl">実装だけ</span>=緑の太線 <span class="lp official">公式だけ</span>=灰の点線 <span class="lp none">どちらにも無い</span>=斜線</span>
+  </div>
+  <div class="chips" role="group" aria-label="Five Safes の札と実装で絞る">
+    <button class="chip" data-safe="people" aria-pressed="false">安全な人</button>
+    <button class="chip" data-safe="projects" aria-pressed="false">安全なプロジェクト</button>
+    <button class="chip" data-safe="settings" aria-pressed="false">安全な場所</button>
+    <button class="chip" data-safe="data" aria-pressed="false">安全なデータ</button>
+    <button class="chip" data-safe="outputs" aria-pressed="false">安全な出力</button>
+    <button class="chip" data-ik="oss" aria-pressed="false"><span class="ib oss">O</span>OSS だけ</button>
+    <button class="chip" data-ik="commercial" aria-pressed="false"><span class="ib commercial">商</span>商用だけ</button>
+    <button class="chip" data-ik="commercial-oss" aria-pressed="false"><span class="ib commercial-oss">商O</span>商用の OSS 版だけ</button>
+    <button class="chip" id="t-open" aria-pressed="false">曖昧だけ</button>
+  </div>
+  <div class="main">
+    <div class="scroll" id="tre-wrap">
+{{TRE_SVG}}
+    </div>
+    <aside class="panel" id="tre-panel" aria-live="polite">
+      <h3>箱・矢印・枠を押してください</h3>
+      <p class="note">確かさ・持ち主・公式の出典・実装の根拠(OSS/商用/商用の OSS 版、コード/リリース/稼働の記述/文書だけ)・TRE の問題が出ます。下の TRE の問題を押すと、その場所が光ります。</p>
+    </aside>
+  </div>
+  <h3>TRE 全体の問題({{T_PROB}} 件、数字は TRE として重い順)</h3>
+  <div class="list" id="tre-probs"></div>
+  <h3>4 つの図の問題のうち TRE で重くなるもの({{T_HEAVY}} 件)</h3>
+  <p class="note">押すと上の 4 つの図でその場所が光ります。</p>
+  <div class="tablewrap"><table id="tre-heavy"><thead><tr><th>問題</th><th>なぜ TRE で重いか(推定)</th><th>TRE の問題</th></tr></thead><tbody></tbody></table></div>
+  <h3>標準({{T_STD}})</h3>
+  <div class="tablewrap"><table id="tre-std"><thead><tr><th>標準</th><th>版・状態</th><th>作業部会</th><th>図</th><th>図の場所</th><th>TRE で</th></tr></thead><tbody></tbody></table></div>
+  <h3>実装({{T_IMPLS}})</h3>
+  <div class="tablewrap"><table id="tre-impls"><thead><tr><th>実装</th><th>区分</th><th>版</th><th>メモ</th><th>観測日</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+  <h2>枠をまたぐ矢印と責任</h2>
+  <div class="tablewrap"><table id="duty-table"><thead><tr><th>矢印</th><th>中身</th><th>どこから → どこへ</th><th>確かさ</th><th>誰が何に責任を持つか</th><th>問題</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+  <h2>仕様の問題({{N_GAP}} 件)</h2>
+  <p class="note" style="margin-bottom:6px">原本は <code>docs/data/spec-gaps.yaml</code>(<code>docs/spec-gaps.md</code> も同じものから作る)。押すと図の場所が光ります。</p>
+  <div class="list" id="gap-list"></div>
+</section>
+
+<section>
+  <h2>AAI の元の技術と GA4GH の差({{N_AAI}} 項目)</h2>
+  <p class="lead" style="margin-bottom:10px">AAI 1.2・Passport 1.2 は OAuth 2.0・OpenID Connect・JWT の上に乗っています。下の段が元の技術、上の段が GA4GH の層で、色は「そのまま使う/GA4GH が足した/変えた・制限した」です。押すと表がその技術に絞られ、上の関係図ではその技術が効く箱・矢印だけが残ります(図を押すと戻ります)。</p>
+  <div class="scroll">
+{{AAI_SVG}}
+  </div>
+  <div class="tablewrap" style="margin-top:12px"><table id="aai-table"><thead><tr><th>ID</th><th>元の技術</th><th>何について</th><th>差</th><th>元の技術では</th><th>GA4GH では</th><th>図の場所</th><th>確かさ</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+  <h2>矛盾の確かめ表({{N_C}} 行)</h2>
+  <p class="note" style="margin-bottom:6px">4 つをまとめたときに「呼ぶ側の前提」と「呼ばれる側の仕様」が合うか。原本は <code>docs/data/c-checks.yaml</code>(<code>docs/design/system.md</code> 9 節の表も同じものから作る)。押すと図の場所が光ります。</p>
+  <div class="chips" role="group" aria-label="判定で絞る" style="margin-bottom:6px">
+    <button class="chip" data-v="合わない" aria-pressed="false"><span class="dot" style="background:var(--v0)"></span>合わない {{N_NG}}</button>
+    <button class="chip" data-v="注意" aria-pressed="false"><span class="dot" style="background:var(--v1)"></span>注意 {{N_WARN}}</button>
+    <button class="chip" data-v="合う" aria-pressed="false"><span class="dot" style="background:var(--v2)"></span>合う {{N_OK}}</button>
+  </div>
+  <div class="list" id="c-list"></div>
+</section>
+
+<section>
+  <h2>試験({{N_TEST}} 件)</h2>
+  <p class="note" style="margin-bottom:6px"><code>docs/test-plan.md</code> と表の「試験」の列の試験を、図の箱・矢印に結んだもの(原本は <code>docs/data/diagram.yaml</code> の <code>tests</code>)。状態は事実だけ: <b>通過</b>・<b>失敗</b>は <code>make check</code> の結果(<code>build/junit.xml</code>)、<b>一部</b>は通った分が試験の一部だけのもの、<b>未実施</b>はまだ作っていない(段階 2 の 4 つまとめた試験・段階 3 の相互運用など)。test-plan 3 節の義務の試験(<code>obligations.yaml</code> の行)はここに入れていません。</p>
+  <div class="chips" role="group" aria-label="状態で絞る" style="margin-bottom:6px">
+    <button class="chip" data-s="通過" aria-pressed="false">通過 {{N_T_PASS}}</button>
+    <button class="chip" data-s="一部" aria-pressed="false">一部 {{N_T_PART}}</button>
+    <button class="chip" data-s="失敗" aria-pressed="false">失敗 {{N_T_FAIL}}</button>
+    <button class="chip" data-s="未実施" aria-pressed="false">未実施 {{N_T_NONE}}</button>
+  </div>
+  <div class="tablewrap"><table id="test-table"><thead><tr><th>試験</th><th>状態</th><th>段階</th><th>図の場所</th><th>C の行</th><th>問題</th></tr></thead><tbody></tbody></table></div>
+</section>
+</div>
+
+<script>
+const D = {{DATA}};
+const T = {{TRE_DATA}};
+const HEAVY = Object.fromEntries(T.heavy.map((h) => [h.gap, h.tre]));
+const KINDS = ["食い違い", "漏れ", "古い", "組み合わせ"];
+const CERT = { spec: "仕様で決まっている", yai: "yai が仮に決めた", open: "曖昧" };
+const REL = { "as-is": "そのまま使う", added: "GA4GH が足した", changed: "変えた・制限した" };
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const kcls = (k) => "k" + KINDS.indexOf(k);
+const name = (id) => (D.boxes[id] ? D.boxes[id].name : id);
+const arrowTag = (id) => D.arrows[id].sys || id;
+const whereText = (w) => (D.arrows[w] ? `${arrowTag(w)} ${D.arrows[w].label}` : name(w));
+const pill = (c) => `<span class="pill c-${c}">${CERT[c]}</span>`;
+const VERD = ["合わない", "注意", "合う"];
+const vd = (v) => `<span class="vd v${VERD.indexOf(v)}">${v}</span>`;
+const ts = (s) => `<span class="ts s-${s}">${s}</span>`;
+const MAPCHIPS = ".chip[data-k], #f-open, #f-ng";
+
+function cHtml(id) {
+  const r = D.crows[id];
+  return `<div class="crow" data-crow="${id}" tabindex="0" role="button">
+    <div class="head"><span class="id">${id}</span>${vd(r.verdict)}<b>${r.call}</b><span class="note">段階 ${r.stage}</span></div>
+    <div><span class="lab">期待する結果 </span>${r.expect}</div>
+    <details><summary>前提・仕様・合わせ方</summary>
+      <div><span class="lab">呼ぶ側の前提 </span>${r.assume}</div>
+      <div><span class="lab">呼ばれる側の仕様 </span>${r.spec}</div>
+      <div><span class="lab">合わせ方 </span>${r.fix}</div></details>
+    <div><span class="lab">試験 </span>${r.tests.length ? r.tests.map((t) => `<code>${esc(t)}</code> ${ts(D.tests[t].status)}`).join("、") : esc(r.test)}</div>
+    <div><span class="lab">図の場所 </span>${r.where.map(whereText).map(esc).join("、")}${r.gaps.length ? `<span class="lab"> 問題 </span>${r.gaps.join("、")}` : ""}</div></div>`;
+}
+function testHtml(id) {
+  const t = D.tests[id];
+  return `<div class="crow" data-test="${esc(id)}" tabindex="0" role="button">
+    <div class="head"><code>${esc(id)}</code>${ts(t.status)}<span class="note">段階 ${esc(t.stage)}・${esc(t.plan)}</span></div>
+    ${t.c.length ? `<div><span class="lab">C の行 </span>${t.c.join("、")}</div>` : ""}
+    ${t.pytest.length ? `<div><span class="lab">pytest </span>${t.pytest.map((x) => `<code>${esc(x)}</code>`).join(" ")}</div>` : ""}
+    ${t.partial ? `<div><span class="lab">一部の理由 </span>${esc(t.partial)}</div>` : ""}${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}</div>`;
+}
+function placeExtra(x) {
+  return `<h3 style="margin-top:12px">矛盾の確かめ表 ${x.c.length} 行</h3>${x.c.map(cHtml).join("") || '<p class="note">なし</p>'}
+    <h3 style="margin-top:12px">試験 ${x.tests.length} 件</h3>${x.tests.map(testHtml).join("") || '<p class="note">なし</p>'}`;
+}
+
+function gapHtml(id) {
+  const g = D.gaps[id];
+  return `<div class="gap" data-gap="${id}" tabindex="0" role="button">
+    <div class="head"><span class="id">${id}</span><span class="pill ${kcls(g.kind)}">${g.kind}</span>${HEAVY[id] ? `<span class="pill tre-heavy" title="TRE で重くなる(${HEAVY[id].join("・")})">TRE で重い</span>` : ""}<span class="note">確かめ: ${esc(g.check)}</span></div>
+    <div>${g.body}</div>
+    <div><span class="lab">出典 </span>${g.source}</div>
+    <div><span class="lab">yai の解釈 </span>${g.yai}</div>
+    <div><span class="lab">図の場所 </span>${g.where.map(whereText).map(esc).join("、")}</div></div>`;
+}
+function atHtml(at) {
+  return at.length ? `<dt>出典</dt><dd>${at.map((a) => `<code>${esc(a)}</code>`).join("<br>")}</dd>` : "";
+}
+function show(kind, id) {
+  $$(".sel").forEach((e) => e.classList.remove("sel"));
+  const el = $(`[data-kind="${kind}"][data-id="${CSS.escape(id)}"]`);
+  if (el) el.classList.add("sel");
+  const p = $("#panel");
+  if (kind === "box") {
+    const b = D.boxes[id], o = D.boundaries[b.boundary];
+    p.innerHTML = `<h3>${esc(b.name)}</h3><dl class="meta"><dt>枠</dt><dd>${esc(o.name)} ${pill(o.certainty)}</dd>
+      <dt>yai では</dt><dd>${esc(b.yai)}</dd><dt>矢印</dt><dd>${b.arrows.map((a) => esc(arrowTag(a) + " " + D.arrows[a].label)).join("<br>")}</dd></dl>
+      <h3>問題 ${b.gaps.length} 件</h3>${b.gaps.map(gapHtml).join("") || '<p class="note">なし</p>'}${placeExtra(b)}`;
+  } else if (kind === "arrow") {
+    const a = D.arrows[id];
+    p.innerHTML = `<h3>${esc(arrowTag(id))} ${esc(a.label)}</h3><dl class="meta">
+      <dt>向き</dt><dd>${esc(name(a.from))} → ${esc(name(a.to))}${a.kind === "trust" ? "(信頼・責任の関係)" : ""}</dd>
+      <dt>確かさ</dt><dd>${pill(a.certainty)}${a.decision ? ` <code>${a.decision}</code>` : ""}</dd>
+      ${a.reason ? `<dt>曖昧な理由</dt><dd>${esc(a.reason)}</dd>` : ""}
+      ${a.responsible ? `<dt>${a.crosses ? "責任分界点" : "責任"}</dt><dd>${esc(a.responsible)}</dd>` : ""}
+      ${a.yai ? `<dt>yai では</dt><dd>${esc(a.yai)}</dd>` : ""}${atHtml(a.at)}</dl>
+      <h3>問題 ${a.gaps.length} 件</h3>${a.gaps.map(gapHtml).join("") || '<p class="note">なし</p>'}${placeExtra(a)}`;
+  } else if (kind === "boundary") {
+    const o = D.boundaries[id];
+    const gs = [...new Set(o.boxes.flatMap((b) => D.boxes[b].gaps))];
+    p.innerHTML = `<h3>${esc(o.name)}</h3><dl class="meta"><dt>確かさ</dt><dd>${pill(o.certainty)}</dd>
+      ${o.reason ? `<dt>曖昧な理由</dt><dd>${esc(o.reason)}</dd>` : ""}
+      <dt>役割</dt><dd>${esc(o.role)}</dd><dt>yai では</dt><dd>${esc(o.yai)}</dd>
+      <dt>箱</dt><dd>${o.boxes.map((b) => esc(name(b))).join("、")}</dd>${atHtml(o.at)}</dl>
+      <h3>中の箱の問題 ${gs.length} 件</h3>${gs.map(gapHtml).join("") || '<p class="note">なし</p>'}`;
+  }
+  bindGaps(p);
+}
+function lightPlaces(where, panel) {
+  $$("#map [data-kind='box'], #map [data-kind='arrow']").forEach((e) => { e.classList.toggle("dim", !where.includes(e.dataset.id)); e.classList.remove("ng"); });
+  $$(MAPCHIPS).forEach((c) => c.setAttribute("aria-pressed", "false"));
+  const first = where[0];
+  show(D.arrows[first] ? "arrow" : "box", first);
+  if (panel) { const p = $("#panel"); p.innerHTML = panel + p.innerHTML; bindGaps(p); }
+  $("#map-wrap").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+const lightGap = (id) => lightPlaces(D.gaps[id].where);
+const lightC = (id) => lightPlaces(D.crows[id].where, `<p class="note">${id} の場所(${D.crows[id].where.length} か所)を光らせています。下は最初の場所の詳細です。</p>`);
+const lightTest = (id) => lightPlaces(D.tests[id].targets, `<p class="note"><code>${esc(id)}</code> の場所(${D.tests[id].targets.length} か所)を光らせています。下は最初の場所の詳細です。</p>`);
+function bindOne(e, go) {
+  e.addEventListener("click", (ev) => { if (ev.target.closest("summary")) return; go(); });
+  e.addEventListener("keydown", (ev) => { if (ev.target === e && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); go(); } });
+}
+function bindGaps(root) {
+  $$("[data-gap]", root).forEach((e) => bindOne(e, () => lightGap(e.dataset.gap)));
+  $$("[data-crow]", root).forEach((e) => bindOne(e, () => lightC(e.dataset.crow)));
+  $$("[data-test]", root).forEach((e) => bindOne(e, () => lightTest(e.dataset.test)));
+}
+function applyFilter() {
+  const ks = $$(".chip[data-k][aria-pressed='true']").map((c) => c.dataset.k);
+  const open = $("#f-open").getAttribute("aria-pressed") === "true";
+  const ng = $("#f-ng").getAttribute("aria-pressed") === "true";
+  $$("#map [data-kind='box'], #map [data-kind='arrow']").forEach((e) => {
+    let on = true;
+    if (ks.length) {
+      const have = JSON.parse(e.dataset.kinds || "{}");
+      on = ks.some((k) => have[k]);
+    }
+    if (open && e.dataset.kind === "arrow") on = on && D.arrows[e.dataset.id].certainty === "open";
+    if (open && e.dataset.kind === "box") on = on && D.boundaries[D.boxes[e.dataset.id].boundary].certainty === "open";
+    if (ng) on = on && e.dataset.verdict === "合わない";
+    e.classList.toggle("dim", !on);
+    e.classList.toggle("ng", ng && on);
+  });
+  const tre = $("#f-tre").getAttribute("aria-pressed") === "true";
+  $$("#gap-list [data-gap]").forEach((e) => { e.hidden = (ks.length > 0 && !ks.includes(D.gaps[e.dataset.gap].kind)) || (tre && !HEAVY[e.dataset.gap]); });
+  const vs = $$(".chip[data-v][aria-pressed='true']").map((c) => c.dataset.v);
+  $$("#c-list [data-crow]").forEach((e) => { e.hidden = vs.length > 0 && !vs.includes(D.crows[e.dataset.crow].verdict); });
+  const ss = $$(".chip[data-s][aria-pressed='true']").map((c) => c.dataset.s);
+  $$("#test-table [data-test]").forEach((e) => { e.hidden = ss.length > 0 && !ss.includes(D.tests[e.dataset.test].status); });
+}
+$$(".chip").filter((c) => !c.closest("#tre-sec")).forEach((c) => c.addEventListener("click", () => {
+  c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  applyFilter();
+}));
+$$("#map [data-kind]").forEach((e) => {
+  const go = () => show(e.dataset.kind, e.dataset.id);
+  e.addEventListener("click", (ev) => { ev.stopPropagation(); go(); });
+  e.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+});
+
+$("#gap-list").innerHTML = Object.keys(D.gaps).map(gapHtml).join("");
+bindGaps($("#gap-list"));
+$("#duty-table tbody").innerHTML = Object.entries(D.arrows).filter(([, a]) => a.crosses).map(([id, a]) =>
+  `<tr><td><code>${esc(arrowTag(id))}</code></td><td>${esc(a.label)}</td><td>${esc(name(a.from))} → ${esc(name(a.to))}</td>
+   <td>${pill(a.certainty)}${a.decision ? ` <code>${a.decision}</code>` : ""}</td><td>${esc(a.responsible)}</td><td>${a.gaps.join("、")}</td></tr>`).join("");
+function aaiRows(filter) {
+  $("#aai-table tbody").innerHTML = D.aai.filter(filter).map((r) =>
+    `<tr><td><code>${r.id}</code></td><td>${esc(r.tech_detail)}<br><span class="note">${esc(r.base_at)}</span></td><td>${esc(r.item)}</td>
+     <td><span class="rtag r-${r.relation}">${REL[r.relation]}</span></td>
+     <td>${esc(r.base)}<br><span class="note">「${esc(r.base_quote)}」</span></td>
+     <td>${esc(r.ga4gh)}<br><span class="note">${r.ga4gh_at.map((a) => `<code>${esc(a)}</code>`).join(" ")}</span>${r.note ? `<br><span class="note">${esc(r.note)}</span>` : ""}</td>
+     <td>${r.links.map(whereText).map(esc).join("、")}</td><td>${r.confidence}</td></tr>`).join("");
+}
+aaiRows(() => true);
+$$("#aai-map [data-kind]").forEach((e) => {
+  const go = () => {
+    const t = e.dataset.kind === "tech" ? e.dataset.id : e.dataset.tech;
+    const rel = e.dataset.rel;
+    const rows = D.aai.filter((r) => r.tech === t && (!rel || r.relation === rel));
+    aaiRows((r) => rows.includes(r));
+    const links = new Set(rows.flatMap((r) => r.links));
+    $$("#map [data-kind='box'], #map [data-kind='arrow']").forEach((m) => m.classList.toggle("dim", !links.has(m.dataset.id)));
+    $$("#aai-map .sel").forEach((x) => x.classList.remove("sel"));
+    e.classList.add("sel");
+  };
+  e.addEventListener("click", go);
+  e.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+});
+$("#c-list").innerHTML = Object.keys(D.crows).map(cHtml).join("");
+bindGaps($("#c-list"));
+$("#test-table tbody").innerHTML = Object.entries(D.tests).map(([id, t]) =>
+  `<tr class="trow" data-test="${esc(id)}" tabindex="0" role="button"><td><code>${esc(id)}</code></td><td>${ts(t.status)}${t.partial ? `<br><span class="note">${esc(t.partial)}</span>` : ""}</td>
+   <td>${esc(t.stage)}</td><td>${t.targets.map(whereText).map(esc).join("、")}</td><td>${t.c.join("、")}</td><td>${t.gaps.join("、")}</td></tr>`).join("");
+bindGaps($("#test-table"));
+$("#map").addEventListener("click", () => { $$("#map .dim").forEach((e) => e.classList.remove("dim")); $$("#map .ng").forEach((e) => e.classList.remove("ng")); });
+// ── TRE の層
+const TCERT = { spec: "仕様で決まっている", policy: "方針だけ", yai: "yai が仮に決めた", open: "曖昧" };
+const TLAY = { both: "両方にある", official: "公式だけ(実装なし)", impl: "実装だけ(公式になし)", none: "どちらにも無い" };
+const SAFE = { people: "安全な人", projects: "安全なプロジェクト", settings: "安全な場所", data: "安全なデータ", outputs: "安全な出力" };
+const IK = { oss: "OSS", commercial: "商用", "commercial-oss": "商用の OSS 版" };
+const BAS = { code: "コード", release: "リリース", running: "稼働の記述", docs: "文書だけ" };
+const tpill = (c) => `<span class="pill c-${c}">${TCERT[c]}</span>`;
+const tname = (id) => (T.boxes[id] ? T.boxes[id].name : T.bounds[id] ? T.bounds[id].name : T.arrows[id] ? `${T.arrows[id].sys || id} ${T.arrows[id].name}` : id);
+const link = (u) => (u ? `<a href="${esc(u)}" rel="noopener" target="_blank">${esc(u.replace(/^https?:\/\//, "").slice(0, 70))}</a>` : "");
+function tprobHtml(id) {
+  const p = T.problems[id];
+  return `<div class="gap" data-tprob="${id}" tabindex="0" role="button">
+    <div class="head"><span class="id">${id}</span>${p.rank ? `<b>重さ ${p.rank}</b>` : ""}${tpill(p.certainty)}<b>${esc(p.title)}</b></div>
+    <div><span class="lab">標準 </span>${esc(p.standard)}</div>
+    <div><span class="lab">実装 </span>${esc(p.impl)}</div>
+    <div><span class="lab">誰の責任になりそうか </span>${esc(p.owner)}</div>
+    <div><span class="lab">改善の余地(案) </span>${esc(p.idea)}</div>
+    <div><span class="lab">図の場所 </span>${p.where.map(tname).map(esc).join("、")}${p.gaps && p.gaps.length ? `<span class="lab"> 4 つの図の問題 </span>${p.gaps.join("、")}` : ""}</div></div>`;
+}
+function tshow(kind, id) {
+  $$("#tre-map .sel").forEach((e) => e.classList.remove("sel"));
+  const el = $(`#tre-map [data-kind="tre-${kind}"][data-id="${CSS.escape(id)}"]`);
+  if (el) el.classList.add("sel");
+  const x = kind === "box" ? T.boxes[id] : kind === "arrow" ? T.arrows[id] : T.bounds[id];
+  const head = kind === "arrow" ? `${esc(x.sys || id)} ${esc(x.name)}` : esc(x.name);
+  const src = x.src.map((s) => `${s.url ? link(s.url) : `<code>${esc(s.quote)}</code>`}${s.url && s.quote ? `<br><span class="note">「${esc(s.quote)}」</span>` : ""}${s.seen ? ` <span class="note">${esc(s.seen)}</span>` : ""}`).join("<br>");
+  const ev = x.impl.map((e) => `<div class="gap"><div class="head"><span class="ib ${e.kind}">${IK[e.kind]}</span><b>${esc(e.name)}</b><span class="note">${BAS[e.basis]}・${e.conf}・${esc(e.seen)}</span></div><div>${esc(e.note)}</div><div>${link(e.url)}</div></div>`).join("");
+  $("#tre-panel").innerHTML = `<h3>${head}</h3><dl class="meta">
+    ${kind === "arrow" ? `<dt>向き</dt><dd>${esc(tname(x.from))} → ${esc(tname(x.to))}${x.kind === "trust" ? "(信頼・責任の関係)" : ""}</dd>` : ""}
+    ${kind === "box" ? `<dt>枠</dt><dd>${esc(T.bounds[x.boundary].name)} ${tpill(T.bounds[x.boundary].certainty)}</dd>` : ""}
+    <dt>確かさ</dt><dd>${tpill(x.certainty)}${x.decision ? ` <code>${x.decision}</code>` : ""}</dd>
+    <dt>重ね合わせ</dt><dd><span class="lp ${x.layer}">${TLAY[x.layer]}</span></dd>
+    ${x.reason ? `<dt>曖昧な理由</dt><dd>${esc(x.reason)}</dd>` : ""}
+    ${x.role ? `<dt>役割</dt><dd>${esc(x.role)}</dd>` : ""}
+    ${x.owner ? `<dt>持ち主</dt><dd>${esc(x.owner)}</dd>` : ""}
+    ${x.responsible ? `<dt>${x.crosses ? "責任分界点" : "責任"}</dt><dd>${esc(x.responsible)}</dd>` : ""}
+    ${x.safes.length ? `<dt>Five Safes</dt><dd>${x.safes.map((s) => `<span class="sf">${SAFE[s]}</span>`).join(" ")}</dd>` : ""}
+    ${x.note ? `<dt>メモ</dt><dd>${esc(x.note)}</dd>` : ""}
+    ${src ? `<dt>公式の出典</dt><dd>${src}</dd>` : ""}
+    ${x.ref ? `<dt>4 つの図</dt><dd><a href="#${esc(id)}" data-goref="${esc(id)}">上の図で見る(出典・問題・試験)</a></dd>` : ""}</dl>
+    <h3>実装の根拠 ${x.impl.length} 件</h3>${ev || '<p class="note">見つからなかった(公式だけ、またはどちらにも無い)</p>'}
+    <h3 style="margin-top:12px">TRE の問題 ${x.problems.length} 件</h3>${x.problems.map(tprobHtml).join("") || '<p class="note">なし</p>'}`;
+  bindT($("#tre-panel"));
+  $$("[data-goref]", $("#tre-panel")).forEach((a) => a.addEventListener("click", (ev2) => {
+    ev2.preventDefault();
+    const r = a.dataset.goref;
+    if (D.boxes[r]) show("box", r); else if (D.arrows[r]) show("arrow", r); else if (D.boundaries[r]) show("boundary", r);
+    $("#map-wrap").scrollIntoView({ block: "start" });
+  }));
+}
+function tApply() {
+  const view = $("#tre-sec").dataset.view;
+  const sf = $$("#tre-sec .chip[data-safe][aria-pressed='true']").map((c) => c.dataset.safe);
+  const ik = $$("#tre-sec .chip[data-ik][aria-pressed='true']").map((c) => c.dataset.ik);
+  const open = $("#t-open").getAttribute("aria-pressed") === "true";
+  $$("#tre-map [data-layer]").forEach((e) => {
+    const lay = e.dataset.layer;
+    const bound = e.dataset.kind === "tre-boundary";
+    const off = (view === "A" && !["both", "official"].includes(lay)) || (view === "B" && !bound && !["both", "impl"].includes(lay));
+    e.classList.toggle("off", off);
+    if (bound) return;
+    let on = true;
+    if (sf.length) on = sf.some((s) => e.dataset.safes.split(" ").includes(s));
+    if (ik.length) on = on && ik.some((k) => e.dataset.impl.split(" ").includes(k));
+    if (open) on = on && e.dataset.cert === "open";
+    e.classList.toggle("dim", !on && !off);
+  });
+}
+function tLight(where) {
+  $$("#tre-map [data-kind='tre-box'], #tre-map [data-kind='tre-arrow'], #tre-map [data-kind='tre-boundary']").forEach((e) => e.classList.toggle("dim", !where.includes(e.dataset.id)));
+  const f = where[0];
+  tshow(T.arrows[f] ? "arrow" : T.boxes[f] ? "box" : "boundary", f);
+  $("#tre-wrap").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+function bindT(root) { $$("[data-tprob]", root).forEach((e) => bindOne(e, () => tLight(T.problems[e.dataset.tprob].where))); }
+$$("#tre-sec .views .chip").forEach((c) => c.addEventListener("click", () => {
+  $$("#tre-sec .views .chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+  $("#tre-sec").dataset.view = c.dataset.view;
+  tApply();
+}));
+$$("#tre-sec .chips .chip").forEach((c) => c.addEventListener("click", () => {
+  c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  tApply();
+}));
+$$("#tre-map [data-kind]").forEach((e) => {
+  const k = e.dataset.kind.replace("tre-", "");
+  if (!["box", "arrow", "boundary"].includes(k)) return;
+  const go = () => tshow(k, e.dataset.id);
+  e.addEventListener("click", (ev) => { ev.stopPropagation(); go(); });
+  e.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+});
+$("#tre-map").addEventListener("click", () => { $$("#tre-map .dim").forEach((e) => e.classList.remove("dim")); tApply(); });
+$("#tre-probs").innerHTML = Object.keys(T.problems).sort((a, b) => (T.problems[a].rank || 99) - (T.problems[b].rank || 99)).map(tprobHtml).join("");
+bindT($("#tre-probs"));
+$("#tre-heavy tbody").innerHTML = T.heavy.map((h) => `<tr class="trow" data-gap="${h.gap}" tabindex="0" role="button"><td><code>${h.gap}</code></td><td>${esc(h.why)}</td><td>${h.tre.join("、")}</td></tr>`).join("");
+bindGaps($("#tre-heavy"));
+$("#tre-std tbody").innerHTML = T.standards.map((s) => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.version)}・${esc(s.status)}</td><td>${esc(s.group)}</td><td>${s.in_map ? "図に入れた" : "一覧だけ"}</td><td>${(s.places || []).map(tname).map(esc).join("、")}</td><td>${esc(s.note)}</td></tr>`).join("");
+$("#tre-impls tbody").innerHTML = Object.entries(T.impls).map(([id, i]) => `<tr><td><b>${esc(i.name)}</b><br>${link(i.url)}</td><td><span class="ib ${i.kind}">${IK[i.kind]}</span></td><td>${esc(i.release)}</td><td>${esc(i.note)}</td><td>${esc(i.seen)}</td></tr>`).join("");
+tApply();
+const h = decodeURIComponent(location.hash.slice(1));
+if (h && D.gaps[h]) lightGap(h);
+else if (h && D.crows[h]) lightC(h);
+else if (h && D.tests[h]) lightTest(h);
+else if (h && D.arrows[h]) show("arrow", h);
+else if (h && D.boxes[h]) show("box", h);
+</script>

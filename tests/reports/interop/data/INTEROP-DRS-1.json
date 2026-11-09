@@ -1,0 +1,192 @@
+{
+ "pair": "INTEROP-DRS-1",
+ "partner": "yai-wes resolver → ga4gh/passport-playground-drs 5eb7745",
+ "started": "2026-10-17T06:37:07Z",
+ "steps": [
+  {
+   "name": "相手(pgdrs)に直接: service-info・OPTIONS・GET object・access・取得",
+   "ok": true,
+   "service_info": {
+    "status": 200,
+    "type": {
+     "group": "org.ga4gh",
+     "artifact": "drs",
+     "version": "1.5.0"
+    }
+   },
+   "options": {
+    "status": 204,
+    "body": ""
+   },
+   "object": {
+    "status": 200,
+    "keys": [
+     "access_methods",
+     "checksums",
+     "created_time",
+     "description",
+     "id",
+     "name",
+     "self_uri",
+     "size",
+     "updated_time",
+     "version"
+    ],
+    "self_uri": "drs://pgdrs.yai.test/ee7b2550261f8b0bb5c581c16d5edf6b372247fc61c7e6bf188a390cd25a7850",
+    "created_time": "2026-10-17T06:22:57.386351+00:00",
+    "checksums": [
+     {
+      "type": "sha-256",
+      "checksum": "ee7b2550261f8b0bb5c581c16d5edf6b372247fc61c7e6bf188a390cd25a7850"
+     },
+     {
+      "type": "md5",
+      "checksum": "9e34091755e9bbe9de3286fff42ad99e"
+     }
+    ],
+    "access_methods": [
+     {
+      "type": "https",
+      "access_id": "local-https",
+      "region": "local"
+     }
+    ]
+   },
+   "access": {
+    "status": 200,
+    "url_scheme_host": "http://pgdrs.yai.test:8645",
+    "headers": {}
+   },
+   "download": {
+    "status": 200,
+    "bytes": 17,
+    "head": "name num\nalice 1\n"
+   }
+  },
+  {
+   "name": "yai-drs に直接(比較): service-info・OPTIONS・GET object・access・取得",
+   "ok": true,
+   "service_info": {
+    "status": 200,
+    "type": {
+     "group": "org.ga4gh",
+     "artifact": "drs",
+     "version": "1.5.0"
+    }
+   },
+   "options": {
+    "status": 200,
+    "body": "{\"drs_object_id\":\"o01m548jvbg8jqkt6bxndqctmn6\",\"supported_types\":[\"None\"]}"
+   },
+   "object": {
+    "status": 200,
+    "keys": [
+     "access_methods",
+     "checksums",
+     "created_time",
+     "id",
+     "name",
+     "self_uri",
+     "size"
+    ],
+    "self_uri": "drs://drs.yai.test/o01m548jvbg8jqkt6bxndqctmn6",
+    "created_time": "2026-10-17T06:25:21Z",
+    "checksums": [
+     {
+      "type": "md5",
+      "checksum": "5c36e2724710e75a6f76376fa801fb9f"
+     },
+     {
+      "type": "sha-256",
+      "checksum": "3e3ff8bc849713aa4f4a92b0af04126e01934bd6ff1b4e4fd5f7f7fae4d0baa0"
+     }
+    ],
+    "access_methods": [
+     {
+      "type": "https",
+      "access_url": {
+       "url": "https://drs.yai.test/yai/blobs/o01m548jvbg8jqkt6bxndqctmn6"
+      }
+     }
+    ]
+   },
+   "access": {
+    "status": "inline",
+    "url_scheme_host": "https://drs.yai.test",
+    "headers": null
+   },
+   "download": {
+    "status": 200,
+    "bytes": 20,
+    "head": "public data for E2E\n"
+   }
+  },
+  {
+   "name": "WES に drs://pgdrs.yai.test/<id> の cat を出す",
+   "ok": true,
+   "status": 200,
+   "body": "{\"run_id\":\"r01m54986afehfg9kbqnyh9qqh5\"}"
+  },
+  {
+   "name": "run が COMPLETE(解決役が相手を解き、TES が相手の access URL から取った)",
+   "ok": true,
+   "state": "COMPLETE",
+   "system_logs": "[\"input infile: drs://pgdrs.yai.test/ee7b2550261f8b0bb5c581c16d5edf6b372247fc61c7e6bf188a390cd25a7850 resolved to http://pgdrs.yai.test:8645/files/ee7b2550261f8b0bb5c581c16d5edf6b372247fc61c7e6bf188a390cd25a7850/alice.tsv\"]",
+   "outputs": "{\"out\": {\"class\": \"File\", \"location\": \"file:///yai/var/tes/files/wes/r01m54986afehfg9kbqnyh9qqh5/1/out/out.txt\", \"size\": 17}}"
+  },
+  {
+   "name": "TES のタスクの入力 URL が相手の access URL(http://pgdrs.yai.test:8645/files/…)",
+   "ok": true,
+   "input_urls": [
+    "http://pgdrs.yai.test:8645/files/ee7b2550261f8b0bb5c581c16d5edf6b372247fc61c7e6bf188a390cd25a7850/alice.tsv"
+   ],
+   "task_states": [
+    "COMPLETE"
+   ]
+  }
+ ],
+ "differences": {
+  "OPTIONS": {
+   "pgdrs": 204,
+   "yai": 200
+  },
+  "created_time": {
+   "pgdrs": "2026-10-17T06:22:57.386351+00:00",
+   "yai": "2026-10-17T06:25:21Z"
+  },
+  "checksum_types": {
+   "pgdrs": [
+    "sha-256",
+    "md5"
+   ],
+   "yai": [
+    "md5",
+    "sha-256"
+   ]
+  },
+  "access_methods": {
+   "pgdrs": [
+    {
+     "type": "https",
+     "access_id": "local-https",
+     "region": "local"
+    }
+   ],
+   "yai": [
+    {
+     "type": "https",
+     "access_url": {
+      "url": "https://drs.yai.test/yai/blobs/o01m548jvbg8jqkt6bxndqctmn6"
+     }
+    }
+   ]
+  },
+  "access_url_scheme_host": {
+   "pgdrs": "http://pgdrs.yai.test:8645",
+   "yai": "https://drs.yai.test"
+  }
+ },
+ "finished": "2026-10-17T06:37:11Z",
+ "passed": 5,
+ "failed": 0
+}

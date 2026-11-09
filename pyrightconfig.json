@@ -1,0 +1,8 @@
+{
+  "include": ["yai", "tests", "tools"],
+  "exclude": [".venv", "build", "var"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard"
+}

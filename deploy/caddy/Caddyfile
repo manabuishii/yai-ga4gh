@@ -1,0 +1,33 @@
+# The four https endpoints (*.yai.test, port 443, local CA; system.md section 2, D-017).
+# No access log (query strings carry signed URLs, system.md section 8)
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+(yai_tls) {
+	tls /certs/server.pem /certs/server-key.pem
+}
+
+aai.yai.test:443 {
+	import yai_tls
+	reverse_proxy aai:8401
+}
+
+drs.yai.test:443 {
+	import yai_tls
+	reverse_proxy drs:8402
+}
+
+tes.yai.test:443 {
+	import yai_tls
+	reverse_proxy tes:8403
+}
+
+wes.yai.test:443 {
+	import yai_tls
+	reverse_proxy wes:8404
+}

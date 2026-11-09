@@ -1,0 +1,15 @@
+# Trust table of the Clearinghouse (design/aai.md section 5). No secrets
+brokers:
+  - iss: http://127.0.0.1:8401/
+    jwks_uri: http://127.0.0.1:8401/.well-known/jwks.json
+visa_issuers:
+  - iss: http://127.0.0.1:8401/visa/
+    jku_allow: [http://127.0.0.1:8401/visa/jwks.json]
+trusted_sources: [https://yai.test/dac]
+accepted_by: [dac]
+clock_skew_seconds: 60
+key_cache_seconds: 3600
+key_refetch_min_interval_seconds: 60
+passport_aud_required: false
+# hosts allowed over http, in the unit tests only (the combined tests use https, D-017)
+insecure_http_hosts: ["127.0.0.1:8401"]

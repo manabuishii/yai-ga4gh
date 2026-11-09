@@ -1,0 +1,19 @@
+# Example config of yai-aai (design/aai.md section 6). Never put real secrets (clients' secret) in git.
+# To use it, copy it to config/aai.local.yaml and replace the secrets (*.local.yaml is ignored by git)
+issuer: http://127.0.0.1:8401/
+keys_dir: var/aai/keys          # signing keys (created at startup if missing, 0600)
+test_endpoints: false           # true enables /test/login (test configs only, D-054)
+passport_aud: [yai-drs]         # C-17
+ttl: {access_token: 900, psat: 900, passport: 7200, visa: 7200}   # D-019
+users:                          # test users (aai.md section 6)
+  alice:   {scopes: [wes.run, wes.read, wes.cancel, tes.submit, tes.read, tes.cancel, drs.read, drs.access],
+            visas: [{value: "https://yai.test/datasets/ds1"}]}
+  bob:     {scopes: [wes.run, wes.read, wes.cancel, tes.submit, tes.read, tes.cancel, drs.read, drs.access],
+            visas: [{value: "https://yai.test/datasets/ds2"}]}
+  carol:   {scopes: []}          # valid but without permissions
+  mallory: {scopes: [wes.run, wes.read], visas: [{value: "https://yai.test/datasets/ds1", issuer: untrusted}]}
+clients:
+  # replace the secret with a random value of 32 or more characters (empty does not start, D-055)
+  yai-test-client: {secret: ""}
+  yai-wes: {secret: "", audiences: [yai-tes, yai-drs],
+            scopes: [tes.submit, tes.read, tes.cancel, tes.delegate]}

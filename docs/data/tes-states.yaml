@@ -1,0 +1,26 @@
+# yai-tes のタスクの状態の移り方(仕様 TES 1.1 の tesState。docs/design/tes.md 4 節)
+# 設計の正(D-006)。実装は実行時に読むかコードに写す。表に無い移り方は内部の誤りとして拒否する
+# 使わない状態: PAUSED・PREEMPTED(G-TES-10)。UNKNOWN は「保存された状態が読めない」ときの出力用で、移り方の始点・終点にしない
+spec: tes-1.1
+initial: QUEUED
+terminal: [COMPLETE, EXECUTOR_ERROR, SYSTEM_ERROR, CANCELED]
+unused: [PAUSED, PREEMPTED, UNKNOWN]
+transitions:
+  - {from: QUEUED,       to: INITIALIZING,   on: worker_picked,       note: 実行役が受け持った。入力の取得を始める}
+  - {from: INITIALIZING, to: RUNNING,        on: first_executor_started, note: 入力の取得が終わり、最初の executor を起動した(TES の RUNNING の定義)}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: input_fetch_failed,  note: 入力の取得の失敗(署名付き URL の期限切れを含む)}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: runtime_failure,     note: 最初のコンテナを起動できない・上限を超えた}
+  - {from: RUNNING,      to: RUNNING,        on: next_executor_started}
+  - {from: RUNNING,      to: EXECUTOR_ERROR, on: executor_nonzero_exit, note: ignore_error でない executor が非 0 で終わった}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: output_upload_failed, note: 出力の転送の失敗(TES-ST-02)}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: runtime_failure,     note: コンテナを起動できない・資源の上限など}
+  - {from: RUNNING,      to: COMPLETE,       on: all_done_and_uploaded, note: 全 executor が誤りなく終わり、出力も置けた(TES-ST-01)}
+  - {from: QUEUED,       to: CANCELING,      on: cancel_requested}
+  - {from: INITIALIZING, to: CANCELING,      on: cancel_requested}
+  - {from: RUNNING,      to: CANCELING,      on: cancel_requested}
+  - {from: CANCELING,    to: CANCELED,       on: cleanup_done,        note: コンテナを止めて消し、作業ディレクトリを消した}
+  - {from: INITIALIZING, to: SYSTEM_ERROR,   on: lost_on_restart,     note: 意図の記録も無く突き合わせられないときだけ。QUEUED は拾い直す(tes.md 4 節)}
+  - {from: RUNNING,      to: SYSTEM_ERROR,   on: lost_on_restart}
+  - {from: CANCELING,    to: CANCELED,       on: lost_on_restart,     note: 取り消し中に見失ったものは片付け済みとみなす(コンテナが無いことを確かめてから)}
+# 取り消しと完了が重なったとき: 先に保存された方が勝つ(状態の書き込みは「今の状態が from のときだけ」の条件付き更新)
+# 終わった状態への cancel_requested は移り方ではない: 200 を返して何もしない(D-020)

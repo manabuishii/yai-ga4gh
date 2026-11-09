@@ -1,0 +1,836 @@
+# TRE の層の図の原本。docs/diagram.html の「TRE の層」は、ここから tools/gen_diagram.py(検査と描き方は tools/gen_tre.py)で作る(手で直さない)。
+# 調べの元: 非公開の調査メモ 2026-10-16(公式の文書、観測 2026-10-16)と
+#            projects/yai/notes/2026-10-20_tre-implementations.md(実装、観測 2026-10-20)。決まりは D-045〜D-052。
+#
+# 枠・箱・矢印の ID が docs/data/diagram.yaml にあるもの(4 つの図にもあるもの)は、名前・確かさ・向きをそちらから取る(ここに書かない)。
+#   4 つの図の箱は「仕様で決まっている」として扱う(GA4GH の仕様・AAI の図にある部品)。
+# 新しいもの: 箱は n-、矢印は r-、枠は B-。certainty(確かさ、D-045):
+#   spec   = 仕様で決まっている(実線)。src(公式の文書の url・quote・seen)か at(specs/ の原文)が要る
+#   policy = 方針だけ(指針・推奨はあるが手順・形式は無い。一点鎖線)。src が要る
+#   yai    = yai が仮に決めた(点線)。decision が要る
+#   open   = 誰も決めていない=曖昧(斜線・点線)。reason と、src・at・impl のどれかが要る
+#   公式の出典(src)は specs/ に固定していない文書なので、道具は形(url・観測日)だけ確かめる(D-045)
+# safes: Five Safes の札(D-046)。people・projects・settings・data・outputs
+# impl: 実装の根拠(D-050)。{by: 下の impls の ID, basis: code|release|running|docs, url, seen, note, guess: 任意}
+#   商用(kind: commercial)の根拠は文書だけなので、いつも「推定」になる(道具が付ける)
+# 重ね合わせ(D-049): 公式にある=certainty が spec か policy、実装にある=impl が 1 つ以上。道具が決める
+# owner: 持ち主が揺れる・決まっていないときに書く(箱は 1 つの枠に入れるので、入れた枠と違う候補をここに)
+
+note: >-
+  公式の出典は 2026-10-16 の調べ(GA4GH の仕様・方針、Five Safes・SATRE・Five Safes RO-Crate・Data Visiting)、
+  実装の根拠は 2026-10-20 の調べ。図に入れた標準は 12(D-047)、残りは下の表に一覧だけ。
+  B-YAI-AUTH(yai の API の利用許可の発行口)は yai の都合の枠なので TRE の図には描かない。
+
+view: {w: 1080, h: 1100}
+
+standards_in_map: 12
+
+boundaries:
+  - {id: B-RES, x: 20, y: 20, w: 240, h: 170}
+  - {id: B-HOME, x: 290, y: 20, w: 230, h: 100}
+  - {id: B-AAI, x: 290, y: 140, w: 230, h: 120}
+  - {id: B-DAC, x: 550, y: 20, w: 240, h: 240}
+  - id: B-FED
+    name: 連合の調整役
+    x: 820
+    y: 20
+    w: 240
+    h: 270
+    certainty: open
+    reason: >-
+      GA4GH のどの仕様にも無い役割。5S-TES(Submission 層=Project・研究者の登録とどの TRE で動かすかの振り分け)と
+      SATRE の Federation の柱(拡張)が自前で持つだけ。どの組織が担うかも決まっていない(D-048)
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "Federation", seen: 2026-10-16}
+    role: 複数の TRE をまとめる。承認済みプロジェクトの台帳・サービスの一覧・道具の登録所を持つ候補
+  - {id: B-OPS, x: 20, y: 310, w: 520, h: 780}
+  - {id: B-DH, x: 570, y: 310, w: 490, h: 780}
+
+boxes:
+  # ── 4 つの図にもある箱
+  - {id: researcher, boundary: B-RES, x: 40, y: 56, w: 200, h: 44, kind: person, safes: [people]}
+  - {id: client, boundary: B-RES, x: 40, y: 126, w: 200, h: 44}
+  - {id: idp, boundary: B-HOME, x: 310, y: 56, w: 190, h: 44, safes: [people]}
+  - {id: broker, boundary: B-AAI, x: 310, y: 180, w: 190, h: 56, safes: [people]}
+  - {id: dac, boundary: B-DAC, x: 570, y: 56, w: 200, h: 44, kind: person, safes: [people, projects]}
+  - {id: visa-issuer, boundary: B-DAC, x: 570, y: 196, w: 200, h: 44, safes: [people]}
+  - {id: wes, boundary: B-OPS, x: 40, y: 350, w: 220, h: 56, safes: [settings]}
+  - {id: tes, boundary: B-OPS, x: 290, y: 350, w: 230, h: 56, safes: [settings]}
+  - {id: runner, boundary: B-OPS, x: 40, y: 450, w: 220, h: 50, safes: [settings]}
+  - {id: outstore, boundary: B-OPS, x: 40, y: 660, w: 220, h: 50, safes: [outputs]}
+  - {id: drs, boundary: B-DH, x: 590, y: 350, w: 210, h: 56, safes: [data]}
+  - {id: ch, boundary: B-DH, x: 830, y: 350, w: 210, h: 56, safes: [people, data]}
+  - {id: bytes, boundary: B-DH, x: 590, y: 450, w: 210, h: 50, safes: [data]}
+  # ── 新しい箱
+  - id: n-dac-procedure
+    name: DAC の手続き・利用契約
+    boundary: B-DAC
+    x: 570
+    y: 116
+    w: 200
+    h: 56
+    certainty: policy
+    safes: [projects, people]
+    src:
+      - {url: "https://www.ga4gh.org/document/data-access-committee-guiding-principles-and-procedural-standards-policy-v2/", quote: "using a common ontology e.g. GA4GH Data Use Ontology (DUO)", seen: 2026-10-16}
+      - {url: "https://www.ga4gh.org/document/model-data-access-agreement-daa-clauses/", seen: 2026-10-16}
+    note: DACReS(審査の基準・進捗報告・事故の対応)と Model DAA Clauses。Passport の語は無い
+  - id: n-project-register
+    name: 承認済みプロジェクトの台帳
+    boundary: B-FED
+    x: 840
+    y: 56
+    w: 200
+    h: 56
+    certainty: policy
+    safes: [projects]
+    owner: 連合の調整役か DAC か(曖昧)。5S-TES は Submission 層(連合)で登録し、TRE の管理者(B-OPS)が承認する
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "5.3.01", seen: 2026-10-16}
+    note: SATRE 5.3.01(M)連合で Safe Projects の台帳を持つ。形式・API は無い
+  - id: n-registry
+    name: Service Registry
+    boundary: B-FED
+    x: 840
+    y: 132
+    w: 200
+    h: 56
+    certainty: spec
+    safes: [settings]
+    owner: サービス網の運営者(当てはまる枠が無く、連合の調整役に近い。推定、D-047)
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/ga4gh-service-registry/1.0.0/service-registry.yaml", seen: 2026-10-16}
+      - {url: "https://raw.githubusercontent.com/ga4gh/ga4gh-service-info/v1.0.0/service-info.yaml", seen: 2026-10-16}
+    note: 各サービスの /service-info(Service Info v1.0)をまとめた一覧。Service Info は WES・TES・DRS・TRS・Data Connect の仕様が $ref で使う
+  - id: n-trs
+    name: TRS(道具の登録所)
+    boundary: B-FED
+    x: 840
+    y: 208
+    w: 200
+    h: 56
+    certainty: spec
+    safes: [settings, projects]
+    owner: 道具の登録所の運営者(連合か計算の運用者か、曖昧。推定)
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/tool-registry-service-schemas/2.0.2/openapi/openapi.yaml", seen: 2026-10-16}
+    note: ワークフロー・道具の一覧・取得(チェックサム付き)。TRE に持ち込める解析を確かめたものに限るときに使える(推定)
+  - id: n-sandbox
+    name: 隔離した実行環境
+    boundary: B-OPS
+    x: 290
+    y: 450
+    w: 230
+    h: 50
+    certainty: policy
+    safes: [settings]
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "2.2.11", seen: 2026-10-16}
+      - {url: "https://www.ga4gh.org/document/data-security-infrastructure-policy/", seen: 2026-10-16}
+    note: SATRE 2.1.14・2.2.10・2.2.11(M)プロジェクトの分離・外への通信は既定で遮断。TES の tesResources に通信の欄は無い
+  - id: n-review-store
+    name: 審査待ちの出力の置き場
+    boundary: B-OPS
+    x: 40
+    y: 560
+    w: 220
+    h: 50
+    certainty: open
+    reason: どの標準にも無い。SATRE は持ち出しの手順を持てと言うだけで、出力をどこに置いて待たせるかは決めていない
+    safes: [outputs]
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "3.1.05", seen: 2026-10-16}
+  - id: n-egress
+    name: 出力の持ち出し審査
+    boundary: B-OPS
+    x: 290
+    y: 560
+    w: 230
+    h: 56
+    certainty: policy
+    safes: [outputs]
+    owner: 許可はデータを持つ機関(SATRE 3.1.06)、作業は計算の運用者(5S-TES)。5S-TES の文書の中でも data owner・TRE administrator・Output Checker と揺れる(曖昧)
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "3.3.04", seen: 2026-10-16}
+    note: SATRE 3.1.05・3.3.04・3.3.05・3.3.07(M)。「airlock」の語は SATRE に無い。API・形式は無い
+  - id: n-5s-crate
+    name: 実行依頼の記録(Five Safes RO-Crate)
+    boundary: B-OPS
+    x: 290
+    y: 660
+    w: 230
+    h: 50
+    certainty: spec
+    safes: [projects, outputs]
+    src:
+      - {url: "https://trefx.uk/5s-crate/0.4/", quote: "Disclosure", seen: 2026-10-16}
+    note: 版 0.4(2023-09-15、TRE-FX Candidate Recommendation)。記録の形の標準で、GA4GH の標準ではない。審査の基準・誰が承認するかは決めない
+  - id: n-audit
+    name: 監査記録
+    boundary: B-OPS
+    x: 290
+    y: 760
+    w: 230
+    h: 50
+    certainty: policy
+    safes: [settings]
+    owner: 計算(B-OPS)とデータの読み出し(B-DH)に分かれる(推定)
+    src:
+      - {url: "https://www.ga4gh.org/document/data-security-infrastructure-policy/", quote: "audit", seen: 2026-10-16}
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "2.5.03", seen: 2026-10-16}
+    note: DSIP v4.0(Dormant)は監査ログを 1 年以上・うち 3 か月はすぐ分析できるように、と推奨。形式は無い。WES・TES・DRS に記録の欄・API は無い
+  - id: n-htsget
+    name: htsget
+    boundary: B-DH
+    x: 830
+    y: 450
+    w: 210
+    h: 50
+    certainty: spec
+    safes: [data]
+    src:
+      - {url: "https://raw.githubusercontent.com/samtools/hts-specs/master/htsget.md", seen: 2026-10-16}
+  - id: n-beacon
+    name: Beacon v2
+    boundary: B-DH
+    x: 590
+    y: 550
+    w: 210
+    h: 50
+    certainty: spec
+    safes: [data]
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh-beacon/beacon-v2/v2.2.0/docs/security.md", seen: 2026-10-16}
+  - id: n-dataconnect
+    name: Data Connect
+    boundary: B-DH
+    x: 830
+    y: 550
+    w: 210
+    h: 50
+    certainty: spec
+    safes: [data]
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/data-connect/1.0.0/SPEC.md", seen: 2026-10-16}
+  - id: n-duo
+    name: DUO(データの利用条件の札)
+    boundary: B-DH
+    x: 590
+    y: 650
+    w: 210
+    h: 50
+    certainty: spec
+    safes: [data, projects]
+    owner: 付けるのはデータを持つ機関、照らすのは DAC
+    src:
+      - {url: "https://raw.githubusercontent.com/EBISPOT/DUO/master/README.md", seen: 2026-10-16}
+  - id: n-c4gh
+    name: Crypt4GH の鍵
+    boundary: B-DH
+    x: 830
+    y: 650
+    w: 210
+    h: 50
+    certainty: open
+    reason: Crypt4GH はファイルの形式だけを決める。鍵を誰が持ち、誰の公開鍵で暗号化し直すかは仕様の範囲外
+    safes: [data]
+    owner: 暗号化はデータを持つ機関、復号は計算の運用者(推定)
+    src:
+      - {url: "https://raw.githubusercontent.com/samtools/hts-specs/master/crypt4gh.tex", seen: 2026-10-16}
+  - id: n-dataset-passport
+    name: Data Passport(提案)
+    boundary: B-DH
+    x: 590
+    y: 750
+    w: 210
+    h: 50
+    certainty: policy
+    safes: [data, projects]
+    owner: データを持つ機関と DAC(推定)
+    src:
+      - {url: "https://www.ga4gh.org/document/data-passports-introduction/", seen: 2026-10-16}
+    note: 承認版なし(candidates for study)。「Access systems (e.g., DUOS, TREs) can evaluate Data Passports」=TRE を名指しする唯一の GA4GH の文書
+
+  # ── 実装だけにある箱(公式に無い。非公開の調査メモ 2026-10-20 の 4 節)
+  - id: n-tre-agent
+    name: TRE Agent(取りに行く同期)
+    boundary: B-OPS
+    x: 40
+    y: 760
+    w: 220
+    h: 50
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(5S-TES)。連合と TRE の間をどうつなぐかは誰も決めていない
+    safes: [settings, projects]
+  - id: n-ephemeral-creds
+    name: 一時的な資格情報
+    boundary: B-OPS
+    x: 40
+    y: 860
+    w: 220
+    h: 50
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(5S-TES の Camunda・Vault)。TES に入力の資格情報の欄は無い(G-TES-05)
+    safes: [settings, data]
+  - id: n-malware-scan
+    name: マルウェアの検査
+    boundary: B-OPS
+    x: 290
+    y: 860
+    w: 230
+    h: 50
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(Azure TRE・Genomics England)
+    safes: [outputs, settings]
+  - id: n-import
+    name: 持ち込みの審査(import)
+    boundary: B-OPS
+    x: 290
+    y: 960
+    w: 230
+    h: 56
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある。SATRE・Five Safes は持ち出しだけを扱う(Azure TRE・Genomics England は持ち込みも審査)
+    safes: [settings, data]
+
+arrows:
+  # ── 4 つの図にもある矢印
+  - {id: a01, safes: [people]}
+  - {id: m4, safes: [people, projects]}
+  - {id: m5, safes: [people]}
+  - {id: m6, safes: [data, projects]}
+  - {id: m7, safes: [people]}
+  - {id: a14, safes: [settings]}
+  - {id: a10, safes: [settings]}
+  - {id: t1, safes: [settings]}
+  - {id: a12, safes: [outputs], note: 4 つの仕様では出力は審査を経ずに置き場へ書かれる(TRE-01)}
+  - {id: a15, safes: [settings], note: TRE では研究者が TES を直接読めないようにするのが前提(TRE-07)}
+  - {id: a16, safes: [data], note: TRE では研究者がバイト列に触れないのが前提なのに、仕様は止めない(TRE-07)}
+  # ── 新しい矢印
+  - id: r-01
+    label: workflow_url に TRS の URL
+    from: wes
+    to: n-trs
+    certainty: open
+    reason: WES 1.1.0 に TRS の語が無い。workflow_url は「WES から取りに行ける URL」とだけ
+    at: [[wes/workflow_execution_service.openapi.yaml, "workflow_url"]]
+    responsible: どの道具を TRE に入れてよいかは誰が決めるか決まっていない(推定)
+    safes: [settings]
+  - id: r-02
+    label: コンテナを TRS で解決
+    from: tes
+    to: n-trs
+    certainty: open
+    reason: TES の README の「Possible Future Enhancements」にあるだけ
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/task-execution-schemas/v1.1/README.md", quote: "Possible Future Enhancements", seen: 2026-10-16}
+    responsible: 同上(推定)
+    safes: [settings]
+  - id: r-04
+    label: service-info を登録
+    from: drs
+    to: n-registry
+    certainty: spec
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/data-repository-service-schemas/drs-1.5.0/openapi/tags/ServiceRegistry.md", seen: 2026-10-16}
+    responsible: 登録はデータを持つ機関、一覧の運営は連合の調整役(推定)
+    safes: [settings]
+  - id: r-05
+    label: service-info を登録
+    from: tes
+    to: n-registry
+    certainty: open
+    reason: WES・TES の仕様に Service Registry への登録の記述が無い(service-info は返す)
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/ga4gh-service-registry/1.0.0/service-registry.yaml", seen: 2026-10-16}
+    responsible: 登録は計算の運用者、一覧の運営は連合の調整役(推定)
+    safes: [settings]
+  - id: r-06
+    label: AccessMethod.type=htsget
+    from: drs
+    to: n-htsget
+    certainty: spec
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/data-repository-service-schemas/drs-1.5.0/components/schemas/AccessMethod.yaml", quote: "htsget", seen: 2026-10-16}
+    safes: [data]
+    note: 選択肢にあるだけで、細部(チケットの渡し方・認可)は無い
+  - id: r-07
+    label: Passport で認可
+    from: n-htsget
+    to: ch
+    certainty: open
+    reason: htsget は「OAuth 2.0 bearer を示す」だけで、その中身は範囲外
+    src:
+      - {url: "https://raw.githubusercontent.com/samtools/hts-specs/master/htsget.md", quote: "beyond the scope", seen: 2026-10-16}
+    safes: [data, people]
+  - id: r-08
+    label: 暗号化したまま渡す・鍵を渡す
+    from: drs
+    to: n-c4gh
+    certainty: open
+    reason: DRS 1.5.0 に Crypt4GH の記述が無い。htsget にも無い
+    src:
+      - {url: "https://raw.githubusercontent.com/samtools/hts-specs/master/crypt4gh.tex", seen: 2026-10-16}
+    safes: [data]
+  - id: r-09
+    label: 列の DRS ID
+    from: n-dataconnect
+    to: drs
+    certainty: spec
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/data-connect/1.0.0/SPEC.md", quote: "DRS", seen: 2026-10-16}
+    safes: [data]
+    note: should(列に DRS ID があれば説明に書く)
+  - id: r-10
+    label: 登録制の認可に Passport
+    from: n-beacon
+    to: ch
+    via: [[820, 565], [820, 400]]
+    tag_at: 0.3
+    certainty: policy
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh-duri/ga4gh-duri.github.io/1.2/researcher_ids/ga4gh_passport_v1.md", quote: "Registered Access", seen: 2026-10-16}
+    safes: [people, data]
+    note: Passport の Registered Access の節の例示。Beacon v2.2.0 には Passport の語が無い
+  - id: r-11
+    label: handover(データへの道)
+    from: n-beacon
+    to: drs
+    via: [[582, 575], [582, 378]]
+    tag_at: 0.5
+    certainty: open
+    reason: Beacon は「handover URL は認証の後ろのデータを指す」とだけ。DRS・htsget のどれで渡すかは無い
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh-beacon/beacon-v2/v2.2.0/docs/framework.md", seen: 2026-10-16}
+    safes: [data]
+  - id: r-12
+    label: Visa に DUO の言葉を入れる
+    from: n-duo
+    to: visa-issuer
+    via: [[555, 675], [555, 218]]
+    tag_at: 0.45
+    certainty: open
+    reason: Passport 1.2・custom visas に DUO の語が無い。DSIP の推奨と、提案段階の Data Passports だけ
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/data-security/master/DSIP/DSIP_v4.0.md", quote: "data use ontology", seen: 2026-10-16}
+    responsible: 札を付けるのはデータを持つ機関、Visa にするのは DAC の側。つなぎは誰も決めていない
+    safes: [projects, data]
+  - id: r-13
+    label: 研究者の Passport と照らす
+    from: n-dataset-passport
+    to: ch
+    via: [[812, 775], [812, 392]]
+    tag_at: 0.4
+    certainty: policy
+    src:
+      - {url: "https://www.ga4gh.org/document/data-passports-introduction/", quote: "Only granting access when both the Researcher Passport and Data Passport visas align", seen: 2026-10-16}
+    safes: [people, data]
+  - id: r-14
+    label: 承認の決定から Visa を出す
+    from: n-dac-procedure
+    to: visa-issuer
+    certainty: open
+    reason: DAC の決定を Visa にする手続きはどの文書にも無い(DACReS にも Passport の語が無い。4 つの図の m4 も曖昧)
+    src:
+      - {url: "https://www.ga4gh.org/document/data-access-committee-guiding-principles-and-procedural-standards-policy-v2/", seen: 2026-10-16}
+    safes: [projects, people]
+  - id: r-15
+    label: Passport を渡す(WES・TES)
+    from: client
+    to: wes
+    certainty: open
+    reason: WES 1.1.0・TES 1.1 は「OAuth2 bearer を勧める」だけで Passport の語が無い。Passport を仕様として受けるのは DRS だけ
+    at: [[wes/workflow_execution_service.openapi.yaml, "We recommend that WES implementations use an OAuth2"]]
+    responsible: 研究者が渡す。受けて確かめるのは計算の運用者だが、何を確かめるかは決まっていない
+    safes: [people]
+  - id: r-16
+    label: 出力を審査待ちに置く
+    from: runner
+    to: n-review-store
+    certainty: open
+    reason: TES の outputs は審査を経ずに置き場へ書く前提。審査待ちに置く決まりはどの標準にも無い
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "3.1.05", seen: 2026-10-16}
+    safes: [outputs]
+  - id: r-17a
+    label: 審査に出す
+    from: n-review-store
+    to: n-egress
+    certainty: policy
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "3.3.05", seen: 2026-10-16}
+    safes: [outputs]
+  - id: r-17b
+    label: 承認された出力だけ持ち出す
+    from: n-egress
+    to: outstore
+    certainty: policy
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "3.1.06", seen: 2026-10-16}
+    safes: [outputs]
+    note: SATRE 3.1.06 持ち出しの許可は information asset owners か、その委任先に限る
+  - id: r-18a
+    label: 誰がいつ何を実行したか
+    from: tes
+    to: n-audit
+    certainty: open
+    reason: TES・WES に記録の欄・API が無い。形式はどの標準にも無い(DSIP・SATRE は残せと言うだけ)
+    src:
+      - {url: "https://www.ga4gh.org/document/data-security-infrastructure-policy/", seen: 2026-10-16}
+    safes: [settings]
+  - id: r-18b
+    label: 誰がいつ何を読んだか
+    from: drs
+    to: n-audit
+    certainty: open
+    reason: DRS にアクセスの記録の欄・API が無い。データを持つ機関の記録と計算の記録を合わせる決まりも無い
+    src:
+      - {url: "https://www.ga4gh.org/document/data-security-infrastructure-policy/", seen: 2026-10-16}
+    responsible: 読み出しの記録はデータを持つ機関、実行の記録は計算の運用者。合わせる人がいない(推定)
+    safes: [data]
+  - id: r-19
+    label: 審査の結果を Disclosure として記録
+    from: n-egress
+    to: n-5s-crate
+    certainty: spec
+    src:
+      - {url: "https://trefx.uk/5s-crate/0.4/", quote: "Disclosure", seen: 2026-10-16}
+    safes: [outputs]
+    note: 記録の形(AssessAction)だけ。審査の基準は無い
+  - id: r-20
+    label: TES CreateTask+Project・TRE の札
+    from: client
+    to: tes
+    certainty: open
+    reason: GA4GH の TES に、承認済みプロジェクト・実行する TRE の欄は無い。5S-TES が tags に独自の意味を足す
+    src:
+      - {url: "https://raw.githubusercontent.com/ga4gh/task-execution-schemas/v1.1/README.md", seen: 2026-10-16}
+    responsible: 研究者が送る。Project を確かめるのは計算の運用者(5S-TES では TRE の管理者)
+    safes: [projects, settings]
+  - id: r-21
+    label: どの TRE で動かすか
+    from: n-project-register
+    to: tes
+    certainty: open
+    reason: TES・WES は 1 つのサーバーの API で、どの TRE で動かすかの欄は無い。5S-TES の tags.tres だけ
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "Federation", seen: 2026-10-16}
+    responsible: 振り分けは連合の調整役、受けるかは各 TRE の運用者(推定)
+    safes: [projects, settings]
+  - id: r-24
+    label: 承認済みのプロジェクトか
+    from: tes
+    to: n-project-register
+    certainty: open
+    reason: TES に Project の欄が無い。5S-TES が独自に確かめる
+    src:
+      - {url: "https://satre-specification.readthedocs.io/en/stable/specification.html", quote: "5.3.01", seen: 2026-10-16}
+    responsible: 台帳は連合の調整役、確かめて断るのは計算の運用者(推定)
+    safes: [projects]
+
+  # ── 実装だけにある矢印
+  - id: r-pull
+    label: 待っている提出を取りに行く(pull)
+    from: n-tre-agent
+    to: n-project-register
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある。TES・WES は送り込む形の API で、TRE の中から取りに行く形は無い
+    via: [[30, 785], [30, 298], [808, 298], [808, 84]]
+    tag_at: 0.62
+    responsible: 取りに行くのは TRE の運用者(外への通信は TRE の中から出るだけ)。渡すのは連合の調整役
+    safes: [projects, settings]
+  - id: r-agent-tes
+    label: TES に送る(入出力の URL を書き換え)
+    from: n-tre-agent
+    to: tes
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(5S-TES)
+    via: [[272, 785], [272, 378]]
+    tag_at: 0.61
+    safes: [settings]
+  - id: r-creds
+    label: 実行ごとに渡す・終わったら取り消す
+    from: n-ephemeral-creds
+    to: runner
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(5S-TES)
+    via: [[29, 885], [29, 425], [150, 425]]
+    tag_at: 0.86
+    safes: [settings, data]
+  - id: r-scan
+    label: 提出後に検査
+    from: n-review-store
+    to: n-malware-scan
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(Azure TRE・Genomics England)
+    via: [[282, 585], [282, 885]]
+    tag_at: 0.7
+    safes: [outputs]
+  - id: r-import
+    label: 持ち込みも検査・審査
+    from: n-import
+    to: n-malware-scan
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある
+    safes: [settings]
+  - id: r-htsget-drs
+    label: ID から URL を引く(逆向き)
+    from: n-htsget
+    to: drs
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある。DRS → htsget(r-06)とは逆向きで、htsget-rs が DRS 型の窓口を引く
+    shift: [0, 12]
+    safes: [data]
+  - id: r-rems-push
+    label: 承認・取り消しを知らせる(push)
+    from: n-dac-procedure
+    to: ch
+    certainty: open
+    reason: 公式の文書(GA4GH・SATRE・Five Safes RO-Crate)に無い。実装だけにある(REMS)。Visa に失効の仕組みが無い(TRE-05)のを、承認の側から知らせて埋める形
+    via: [[805, 144], [805, 330]]
+    tag_at: 0.35
+    responsible: 知らせるのは DAC の側、止めるのはデータを持つ機関。届け先の形は決まっていない
+    safes: [projects, data]
+
+impls:
+  # 実装の一覧(D-050)。kind: oss|commercial|commercial-oss。調べの元は非公開の調査メモ 2026-10-20 の 2 節
+  - {id: I-5STES, name: Five Safes TES(5S-TES)+DARE-Control(Egress), kind: oss, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", release: v3.4.0-5S-TES-containers(2026-10-14), seen: 2026-10-20, note: Swansea・Nottingham。clone 5s-Tes@217614e・DARE-Control@573be5f・5S-TES-Deployment@a9d392a・5s-tes-docs@b4658a4 を読んだ}
+  - {id: I-FUNNEL, name: Funnel, kind: oss, url: "https://github.com/calypr/funnel", release: v0.11.14(2026-06-11), seen: 2026-10-20, note: ohsu-comp-bio/funnel から calypr/funnel に移った。clone @eff5127}
+  - {id: I-TESK, name: TESK(tesk-api), kind: oss, url: "https://github.com/elixir-cloud-aai/tesk-api", release: Helm tesk-0.1.1(2024-08-16)、tesk-api の最終コミット 2025-02-28, seen: 2026-10-20, note: clone TESK@93fce50・tesk-api@751d482}
+  - {id: I-AZTRE, name: Azure TRE, kind: oss, url: "https://github.com/microsoft/AzureTRE", release: v0.29.1 まで airlock v1(legacy)、main の Unreleased が v2, seen: 2026-10-20, note: CGI と Microsoft のアクセラレータ(README)。有償製品の OSS 版ではないので OSS。clone @ed3d25f5}
+  - {id: I-SWB, name: Service Workbench on AWS, kind: oss, url: "https://github.com/awslabs/service-workbench-on-aws", release: 2024-11-30 で EOL・archived, seen: 2026-10-20, note: egress の型の参考}
+  - {id: I-RES, name: Research and Engineering Studio on AWS, kind: oss, url: "https://github.com/aws/res", release: "2026.09", seen: 2026-10-20, note: TRE の中の VDI(airlock は持たない)}
+  - {id: I-TERRA, name: Terra の部品(Terra Data Repository・DRSHub・Cromwell), kind: commercial-oss, url: "https://github.com/DataBiosphere/terra-drs-hub", release: リリースなし(terra-drs-hub@8e6112d), seen: 2026-10-20, note: Broad・Verily の OSS。区分は推定}
+  - {id: I-DUOS, name: DUOS(consent), kind: commercial-oss, url: "https://github.com/DataBiosphere/consent", release: "@2c6bd21", seen: 2026-10-20, note: Broad の DAC の道具。区分は推定}
+  - {id: I-SDA, name: sda(Federated EGA の sensitive-data-archive), kind: oss, url: "https://github.com/neicnordic/sensitive-data-archive", release: v4.0.2-hotfix-1(2026-10-09), seen: 2026-10-20, note: "@3cdeb6a"}
+  - {id: I-HTSGETRS, name: htsget-rs, kind: oss, url: "https://github.com/umccr/htsget-rs", release: htsget-storage-v0.7.0(2026-08-03), seen: 2026-10-20, note: "@2a91e66"}
+  - {id: I-BEACON, name: Beacon v2 RI・PI, kind: oss, url: "https://github.com/EGA-archive/beacon2-pi-api", release: PI v2.3.3(2026-10-16)、RI v2.0.1(2024-05-30), seen: 2026-10-20, note: RI@f5f3454・PI@37696a3}
+  - {id: I-REMS, name: REMS, kind: oss, url: "https://github.com/CSCfi/rems", release: v2.41(2026-10-12), seen: 2026-10-20, note: "@fc75d7b"}
+  - {id: I-STARTER, name: GA4GH Starter Kit(DRS・WES・Passport Broker), kind: oss, url: "https://github.com/ga4gh/ga4gh-starter-kit-drs", release: DRS v0.3.2(2022-10-14)・Broker v0.0.2(2022-05-13), seen: 2026-10-20, note: 更新は 2022 年で止まっている}
+  - {id: I-GDI, name: GDI の starter-kit 群(LS Login・REMS・sda・htsget を一緒に), kind: oss, url: "https://github.com/GenomicDataInfrastructure/starter-kit-lsaai", release: "@6709e6b ほか", seen: 2026-10-20, note: LS Login 本体の公式ページに GA4GH の記述は無く、GDI の文書(二次資料)}
+  - {id: I-DOCKSTORE, name: Dockstore・dockstore-cli, kind: oss, url: "https://github.com/dockstore/dockstore-cli", release: cli 1.18.0(2025-09-12)・dockstore 1.20.0(2026-07-28), seen: 2026-10-20, note: "@12fcf4c"}
+  - {id: I-SAPPORO, name: Sapporo, kind: oss, url: "https://github.com/sapporo-wes/sapporo-service", release: 2.4.0(2026-10-14), seen: 2026-10-20, note: "@14e6b5c"}
+  - {id: I-CWLWES, name: cwl-WES, kind: oss, url: "https://github.com/elixir-cloud-aai/cwl-WES", release: v0.1.1-dev(2020-11-10), seen: 2026-10-20, note: "@4021c76"}
+  - {id: I-VERILY, name: Verily Workbench, kind: commercial, url: "https://support.workbench.verily.com/docs/guides/governance/perimeter_policy", release: "", seen: 2026-10-20, note: airlock の代わりに境界と閾値で止める型}
+  - {id: I-DNANEXUS, name: DNAnexus(UK Biobank RAP を含む), kind: commercial, url: "https://documentation.dnanexus.com/getting-started/key-concepts/projects", release: "", seen: 2026-10-20, note: project のフラグで止める型}
+  - {id: I-LIFEBIT, name: Lifebit Airlock, kind: commercial, url: "https://lifebit.ai/airlock/", release: "", seen: 2026-10-20, note: airlock を製品として持つ}
+  - {id: I-VELSERA, name: Velsera(Seven Bridges), kind: commercial, url: "https://www.sevenbridges.com/promoting-interoperability-and-standardization-seven-bridges-and-ga4gh/", release: "", seen: 2026-10-20, note: 文書は 2020-12-07(古い)}
+  - {id: I-GEL, name: Genomics England Research Environment, kind: commercial, url: "https://re-docs.genomicsengland.co.uk/airlock_tool/", release: "", seen: 2026-10-20, note: 運用中のサービス。コードが無く運用者の文書だけなので商用(文書だけ)に入れた}
+  - {id: I-EESDE, name: Eastern England SDE(NHS SDE), kind: commercial, url: "https://zenodo.org/records/19254973", release: SOP 2026-03-30, seen: 2026-10-20, note: 運用中のサービスの手順書。区分は商用(文書だけ)}
+
+evidence:
+  # 実装の根拠(D-050)。at=TRE の図の場所。調べの元は非公開の調査メモ 2026-10-20 の 3・4 節
+  - {at: B-FED, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Submission 層が TES の /v1/tasks を受けて Project・利用者・TRE を確かめ、TRE ごとに子の提出を作る(Submission.Api TESController.cs・ConsumeInternalMessageService.cs)"}
+  - {at: B-FED, by: I-LIFEBIT, basis: docs, url: "https://lifebit.ai/?p=33378", seen: 2026-10-20, note: "「federated Airlock」で TRE をまたいで承認を連動させると主張(宣伝、裏付けなし)"}
+  - {at: B-OPS, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "TRE 層は別のスタック(Keycloak の realm も sub・tre・egress の 3 つ、S3 も別)。運用は TRE の管理者(dare-tre-admin)"}
+  - {at: B-OPS, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "workspace ごとに TRE の運用者が持つ。審査は Airlock Manager(導入側が誰に割り当てるか決める)"}
+  - {at: B-DH, by: I-SDA, basis: code, url: "https://github.com/neicnordic/sensitive-data-archive", seen: 2026-10-20, note: "データを持つ機関(Federated EGA のノード)が受け取り・取り込み・配信を自分で動かす(sda/cmd の s3inbox・ingest・verify・finalize・download)"}
+  - {at: B-DAC, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/ga4gh-visas.md", seen: 2026-10-20, note: "申請・承認(entitlement)を持ち、承認から ControlledAccessGrants の Visa を出す"}
+  - {at: tes, by: I-FUNNEL, basis: code, url: "https://github.com/calypr/funnel", seen: 2026-10-20, note: "TES の実装。tes.proto に TES 1.1 の項目。service-info の version は Funnel 自身の版(tes/tes.proto・server/tes.go)"}
+  - {at: tes, by: I-TESK, basis: code, url: "https://github.com/elixir-cloud-aai/tesk-api", seen: 2026-10-20, note: "TES の実装。service-info は version 1.0、backend_parameters だけ 1.1 から足した(src/main/resources/service-info.yaml)"}
+  - {at: tes, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "自前の /v1/service-info(name 5S-TES、storage s3://)。TES の CreateTask を受ける"}
+  - {at: wes, by: I-SAPPORO, basis: docs, url: "https://raw.githubusercontent.com/sapporo-wes/sapporo-service/14e6b5c24dbe9fd1ed8165b7924808498eb4e7ea/docs/wes-compatibility.md", seen: 2026-10-20, note: "WES 1.1.0(workflow_url を必須にする独自の変更)"}
+  - {at: wes, by: I-CWLWES, basis: code, url: "https://raw.githubusercontent.com/elixir-cloud-aai/cwl-WES/4021c76fafedb93467f9ba8ec45801e9d977eb77/cwl_wes/ga4gh/wes/endpoints/run_workflow.py", seen: 2026-10-20, note: "WES の実装。cwl-tes で TES に送る"}
+  - {at: wes, by: I-TERRA, basis: code, url: "https://api.github.com/repos/broadinstitute/cromwell/git/trees/develop?recursive=1", seen: 2026-10-20, note: "Cromwell に WES の route がある(Terra で WES として出しているかは推定)"}
+  - {at: wes, by: I-VELSERA, basis: docs, url: "https://www.sevenbridges.com/promoting-interoperability-and-standardization-seven-bridges-and-ga4gh/", seen: 2026-10-20, note: "WES と DRS を実装と記述(2020 年)"}
+  - {at: drs, by: I-STARTER, basis: code, url: "https://raw.githubusercontent.com/ga4gh/ga4gh-starter-kit-drs/2b76a635161daa5bfbed669a9e2755fed31503cd/src/main/java/org/ga4gh/starterkit/drs/controller/Objects.java", seen: 2026-10-20, note: "POST /objects/{id} が body の passports を確かめ、OPTIONS で PassportAuth を返す"}
+  - {at: drs, by: I-TERRA, basis: docs, url: "https://raw.githubusercontent.com/DataBiosphere/terra-drs-hub/8e6112d9c05503f26c3be74a3f404692c8a30aba/lat.md/drs-resolution.md", seen: 2026-10-20, note: "DRSHub が RAS の Passport を TDR に POST {passports:[...]} で送る(TDR 側のコードは未確認)"}
+  - {at: drs, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/download.md", seen: 2026-10-20, note: "DRS 1.5 の形の GET /objects/{dataset}/{path}(/ga4gh/drs/v1 は無く、drs:// は辿れないと文書自身が書く)"}
+  - {at: drs, by: I-VELSERA, basis: docs, url: "https://www.sevenbridges.com/promoting-interoperability-and-standardization-seven-bridges-and-ga4gh/", seen: 2026-10-20, note: "DRS を実装と記述(2020 年)"}
+  - {at: ch, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/visa/validator.go", seen: 2026-10-20, note: "受ける Visa は ControlledAccessGrants だけ。by・source・asserted を必須で確かめ、jku を許可リストで照らす"}
+  - {at: ch, by: I-STARTER, basis: code, url: "https://raw.githubusercontent.com/ga4gh/ga4gh-starter-kit-drs/2b76a635161daa5bfbed669a9e2755fed31503cd/src/main/java/org/ga4gh/starterkit/drs/controller/Objects.java", seen: 2026-10-20, note: "許す発行元を設定で持って passports を確かめる"}
+  - {at: broker, by: I-STARTER, basis: docs, url: "https://raw.githubusercontent.com/ga4gh/ga4gh-starter-kit-passport-broker/188bc929c1b0a94f99589a4fc15b097b4745d0f1/README.md", seen: 2026-10-20, note: "Passport Broker(最新リリースは 2022 年)"}
+  - {at: visa-issuer, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/ga4gh-visas.md", seen: 2026-10-20, note: "承認から ControlledAccessGrants を出す。by=dac、RS256、jku は /api/jwk、exp は承認の終了日か 1 年。試験的な機能"}
+  - {at: visa-issuer, by: I-DUOS, basis: code, url: "https://raw.githubusercontent.com/DataBiosphere/consent/2c6bd21146b02696e5a518ee3d5fb75903271451/src/main/java/org/broadinstitute/consent/http/service/passport/PassportService.java", seen: 2026-10-20, note: "/api/passport/userinfo が ControlledAccessGrants を作る。exp 1 時間で毎回作り直す。署名しているかは未確認"}
+  - {at: visa-issuer, by: I-GDI, basis: docs, url: "https://raw.githubusercontent.com/GenomicDataInfrastructure/keycloak-ga4gh-visa-issuer/3a38f314cdbe12e7695c79d043ce20bb528f3bec/README.md", seen: 2026-10-20, note: "Keycloak の Visa Issuer は ResearcherStatus と AcceptedTermsAndPolicies だけ(ControlledAccessGrants は出さない)"}
+  - {at: runner, by: I-FUNNEL, basis: code, url: "https://github.com/calypr/funnel", seen: 2026-10-20, note: "Docker か k8s で executor を動かす(config/default-config.yaml・config/kubernetes/executor-job.yaml)"}
+  - {at: runner, by: I-TESK, basis: code, url: "https://github.com/elixir-cloud-aai/tesk-api", seen: 2026-10-20, note: "k8s の Job で executor を動かす"}
+  - {at: outstore, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "承認された出力だけが Submission 側の Project 用 S3 に置かれる(Agent SubmissionController.cs EgressResults)"}
+  - {at: outstore, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "承認後に別の置き場へ server-side copy(StatusChangedQueueTrigger・BlobCreatedTrigger)"}
+  - {at: bytes, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/download.md", seen: 2026-10-20, note: "再暗号化した Crypt4GH を header と content の別の窓口で出す"}
+  - {at: client, by: I-DOCKSTORE, basis: code, url: "https://raw.githubusercontent.com/dockstore/dockstore-cli/12fcf4c9c36d2af4db24fe90a747ee268528a616/dockstore-client/src/main/java/io/dockstore/client/cli/nested/WesLauncher.java", seen: 2026-10-20, note: "Dockstore CLI が WES に送るクライアント"}
+  - {at: t1, by: I-FUNNEL, basis: code, url: "https://github.com/calypr/funnel", seen: 2026-10-20, note: "worker が executor を動かす"}
+  - {at: t1, by: I-TESK, basis: code, url: "https://github.com/elixir-cloud-aai/tesk-api", seen: 2026-10-20, note: "TES の Task を k8s の Job に変える(TesKubernetesConverter.java)"}
+  - {at: a10, by: I-CWLWES, basis: code, url: "https://raw.githubusercontent.com/elixir-cloud-aai/cwl-WES/4021c76fafedb93467f9ba8ec45801e9d977eb77/cwl_wes/ga4gh/wes/endpoints/run_workflow.py", seen: 2026-10-20, note: "WES が cwl-tes で TES に送る。受けた JWT を --token で TES へそのまま渡す"}
+  - {at: m4, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/ga4gh-visas.md", seen: 2026-10-20, note: "同じ REMS の中で、承認(entitlement)がそのまま Visa の材料になる"}
+  - {at: m4, by: I-DUOS, basis: code, url: "https://raw.githubusercontent.com/DataBiosphere/consent/2c6bd21146b02696e5a518ee3d5fb75903271451/src/main/java/org/broadinstitute/consent/http/service/passport/PassportService.java", seen: 2026-10-20, note: "承認済みのデータセットから Visa を作る"}
+  - {at: m5, by: I-GDI, basis: docs, url: "https://raw.githubusercontent.com/GenomicDataInfrastructure/starter-kit-lsaai/6709e6b637c2ad6fa1dc5a2b1305e6452cee77a1/docs/rems.md", seen: 2026-10-20, note: "LS Login の Broker が REMS から Visa を取りに行く(/permissions/{user_id}、API キー)。REMS の登録はサポートへのメール(手作業)", guess: true}
+  - {at: m6, by: I-SDA, basis: docs, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/download.md", seen: 2026-10-20, note: "キャッシュは既定 3600 秒で、その間は取り消したトークンも通る。REMS の新しい承認は最大 1 時間見えず「ログインし直し」(取り消しの空白、TRE-05)"}
+  - {at: m7, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/visa/validator.go", seen: 2026-10-20, note: "信じる Visa の発行元を jku の許可リストで持つ"}
+  - {at: a14, by: I-SAPPORO, basis: docs, url: "https://raw.githubusercontent.com/sapporo-wes/sapporo-service/14e6b5c24dbe9fd1ed8165b7924808498eb4e7ea/docs/authentication.md", seen: 2026-10-20, note: "OIDC の JWT で状態・一覧を読む"}
+  - {at: n-dac-procedure, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/ga4gh-visas.md", seen: 2026-10-20, note: "申請・承認の画面と API。リソースに DUO の札を付け申請者の DUO と自動で照らす(ADR 019、本番の利用者なし)"}
+  - {at: n-dac-procedure, by: I-DUOS, basis: code, url: "https://raw.githubusercontent.com/DataBiosphere/consent/2c6bd21146b02696e5a518ee3d5fb75903271451/src/main/java/org/broadinstitute/consent/http/service/passport/PassportService.java", seen: 2026-10-20, note: "DAC の承認を持ち、承認済みのデータセットを返す"}
+  - {at: n-project-register, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "2 段: Submission で dare-control-admin が登録、TRE で dare-tre-admin が承認・却下(却下は戻せない)。判断は Submission へ同期"}
+  - {at: n-project-register, by: I-GEL, basis: running, url: "https://www.genomicsengland.co.uk/blog/airlock-enabling-ethical-and-secure-data-access-in-clinical-genomics-research", seen: 2026-10-20, note: "承認済みで有効なプロジェクトかを Research Registry で確かめる。export は承認から 30 日たってから"}
+  - {at: n-trs, by: I-DOCKSTORE, basis: code, url: "https://raw.githubusercontent.com/dockstore/dockstore-cli/12fcf4c9c36d2af4db24fe90a747ee268528a616/dockstore-client/src/main/java/io/dockstore/client/cli/nested/WesLauncher.java", seen: 2026-10-20, note: "Dockstore が TRS v2 を出す"}
+  - {at: n-sandbox, by: I-AZTRE, basis: docs, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "外向き通信は Azure Firewall 経由で既定は拒否、明示した宛先だけ(docs/azure-tre-overview/networking.md)"}
+  - {at: n-sandbox, by: I-RES, basis: release, url: "https://raw.githubusercontent.com/aws/res/mainline/README.md", seen: 2026-10-20, note: "VDI。clipboard・file transfer の制限、SSH を止める、S3 VPC endpoint"}
+  - {at: n-sandbox, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "OPA の discovery.rego が Trino の操作を「利用者名=スキーマ名」のときだけ許す(本番の使い方は未確認)", guess: true}
+  - {at: n-sandbox, by: I-VERILY, basis: docs, url: "https://support.workbench.verily.com/docs/guides/governance/perimeter_policy", seen: 2026-10-20, note: "VPC-SC の境界で download・upload・外へのコピーを止める"}
+  - {at: n-sandbox, by: I-DNANEXUS, basis: docs, url: "https://documentation.dnanexus.com/getting-started/key-concepts/projects", seen: 2026-10-20, note: "project のフラグ downloadRestricted・restricted・httpsAppIsolatedBrowsing"}
+  - {at: n-review-store, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "TRE 側の MinIO の Project ごとの OutputBucketTre の /{subId}(Agent DoAgentWork.cs)"}
+  - {at: n-review-store, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "v1(リリース版)は stage ごとの storage account、v2(main)は container の metadata の stage。提出の時点で中身を固める(書き込みの SAS を無効に)"}
+  - {at: n-egress, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/DARE-Control", seen: 2026-10-20, note: "Data-Egress-API。審査はロール data-egress-admin。ファイルごとに承認・却下。文書では審査者が TRE administrator・data owner・Output Checker の 3 通り"}
+  - {at: n-egress, by: I-AZTRE, basis: code, url: "https://raw.githubusercontent.com/microsoft/AzureTRE/main/api_app/models/domain/airlock_request.py", seen: 2026-10-20, note: "Import・Export の 2 種。審査は workspace のロール Airlock Manager。承認後に取り消せる(Approved → Revoked)"}
+  - {at: n-egress, by: I-SWB, basis: code, url: "https://raw.githubusercontent.com/awslabs/service-workbench-on-aws/mainline/docs/docs/deployment/reference/egress_store_approval_process.md", seen: 2026-10-20, note: "申請で SNS に通知するだけ。承認の画面は無く運用者が作る(EOL)"}
+  - {at: n-egress, by: I-LIFEBIT, basis: docs, url: "https://lifebit.ai/airlock/", seen: 2026-10-20, note: "export は既定で無効。Airlock Managers が承認・却下(理由を記録)、承認で期限付きの link。検証済みの Workflow の出力は自動で承認"}
+  - {at: n-egress, by: I-GEL, basis: running, url: "https://re-docs.genomicsengland.co.uk/airlock_tool/", seen: 2026-10-20, note: "GEL の Airlock Team が全件を手で、難しい件は Airlock Committee。識別のリスクを 5 段階で分ける"}
+  - {at: n-egress, by: I-EESDE, basis: running, url: "https://zenodo.org/records/19254973", seen: 2026-10-20, note: "airlock manager 2 人が独立に審査し、承認済みのプロジェクトと合うかも確かめる"}
+  - {at: n-audit, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Egress の判断(Reviewer・時刻)、Submission の AuditLog(IP・フォーム)、TRE の TreAuditLog、TES へ送った JSON(TESK_Audit)"}
+  - {at: n-audit, by: I-AZTRE, basis: code, url: "https://raw.githubusercontent.com/microsoft/AzureTRE/main/api_app/models/domain/airlock_request.py", seen: 2026-10-20, note: "airlock の request が history・updatedBy・reviews を持つ"}
+  - {at: n-audit, by: I-LIFEBIT, basis: docs, url: "https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud-14/services/478556591651973", seen: 2026-10-20, note: "complete audit-trails"}
+  - {at: n-audit, by: I-GEL, basis: running, url: "https://www.genomicsengland.co.uk/blog/airlock-enabling-ethical-and-secure-data-access-in-clinical-genomics-research", seen: 2026-10-20, note: "All outcomes are logged(Committee の決定)"}
+  - {at: n-audit, by: I-VERILY, basis: docs, url: "https://support.workbench.verily.com/docs/guides/governance/perimeter_policy", seen: 2026-10-20, note: "egress log(GCP の外への upload を記録)"}
+  - {at: n-c4gh, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/download.md", seen: 2026-10-20, note: "再暗号化を gRPC の別サービスで。受け取り手の公開鍵をヘッダ X-C4GH-Public-Key で受け、ヘッダを使い捨ての鍵で作り直す"}
+  - {at: n-c4gh, by: I-HTSGETRS, basis: docs, url: "https://raw.githubusercontent.com/umccr/htsget-rs/2a91e661e6a287e3adf30e65c26a8f47697f3548/htsget-config/README.md", seen: 2026-10-20, note: "Crypt4GH は試験的。サーバーの秘密鍵で復号し受け取り手の公開鍵で再暗号化"}
+  - {at: n-htsget, by: I-HTSGETRS, basis: code, url: "https://raw.githubusercontent.com/umccr/htsget-rs/2a91e661e6a287e3adf30e65c26a8f47697f3548/htsget-config/README.md", seen: 2026-10-20, note: "htsget の実装"}
+  - {at: n-beacon, by: I-BEACON, basis: code, url: "https://raw.githubusercontent.com/EGA-archive/beacon2-pi-api/37696a3bc02d820e376738616712d1225fb5d3ef/beacon/permissions/ga4gh_visas/visas_conf.yml", seen: 2026-10-20, note: "Beacon v2 の実装(PI 2.3.3)"}
+  - {at: n-duo, by: I-BEACON, basis: code, url: "https://raw.githubusercontent.com/EGA-archive/beacon2-ri-api/f5f3454fc90b7f09c4f1f486bf7e9af528a63083/beacon/db/datasets.py", seen: 2026-10-20, note: "dataUseConditions.duoDataUse で絞り込める"}
+  - {at: n-duo, by: I-REMS, basis: docs, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/architecture/019-duo.md", seen: 2026-10-20, note: "リソースに DUO の札(本番の利用者なし)"}
+  - {at: r-01, by: I-DOCKSTORE, basis: code, url: "https://raw.githubusercontent.com/dockstore/dockstore-cli/12fcf4c9c36d2af4db24fe90a747ee268528a616/dockstore-client/src/main/java/io/dockstore/client/cli/nested/WesLauncher.java", seen: 2026-10-20, note: "WesLauncher が TRS v2 の PLAIN の記述ファイルの URL を workflow_url に入れる。受け手の WES は普通の https URL として読む(推定)"}
+  - {at: r-02, by: I-TESK, basis: code, url: "https://github.com/elixir-cloud-aai/tesk-api", seen: 2026-10-20, note: "trs://{host}/{id}/versions/{v} のイメージを TRS v2 に問い合わせて置き換える(TrsToolClient)。Funnel・5S-TES には無い"}
+  - {at: r-08, by: I-SDA, basis: code, url: "https://raw.githubusercontent.com/neicnordic/sensitive-data-archive/3cdeb6a2be52e593562238fef0e6d68c76f62f44/sda/cmd/download/download.md", seen: 2026-10-20, note: "DRS 型の窓口が再暗号化した Crypt4GH を返す。DRS の checksum は暗号化した状態のもの"}
+  - {at: r-10, by: I-BEACON, basis: code, url: "https://raw.githubusercontent.com/EGA-archive/beacon2-pi-api/37696a3bc02d820e376738616712d1225fb5d3ef/beacon/auth/__main__.py", seen: 2026-10-20, note: "PI は JWKS で Visa を確かめる(既定では無効)。RI は Visa の署名を確かめない(verify_signature: False)"}
+  - {at: r-14, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/docs/ga4gh-visas.md", seen: 2026-10-20, note: "承認(entitlement)から ControlledAccessGrants を出す(試験的)"}
+  - {at: r-14, by: I-DUOS, basis: code, url: "https://raw.githubusercontent.com/DataBiosphere/consent/2c6bd21146b02696e5a518ee3d5fb75903271451/src/main/java/org/broadinstitute/consent/http/service/passport/PassportService.java", seen: 2026-10-20, note: "承認済みのデータセットから ControlledAccessGrants を作る"}
+  - {at: r-16, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Agent が outputs を s3://<OutputBucketTre>/<subId> に書き換えて TES に渡す。出力 0 件なら審査なしで完了"}
+  - {at: r-16, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "Draft の container に置いて提出(api_app/db/repositories/airlock_requests.py)"}
+  - {at: r-17a, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "COMPLETE で中身を数え、FilesReadyForReview を経て Egress の AddNewDataEgress に登録。data-egress-admin の全員にメール"}
+  - {at: r-17a, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "Submitted →(マルウェアの検査)→ InReview"}
+  - {at: r-17a, by: I-LIFEBIT, basis: docs, url: "https://lifebit.ai/airlock/", seen: 2026-10-20, note: "研究者の申請を Airlock Managers が中央の画面でプレビュー"}
+  - {at: r-17a, by: I-GEL, basis: running, url: "https://re-docs.genomicsengland.co.uk/airlock_tool/", seen: 2026-10-20, note: "Airlock のサイトで申請"}
+  - {at: r-17b, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Approved のファイルだけを Submission 側の Project 用 S3 へコピー。一部だけ承認でも承認分はコピーされ、状態は Failed で閉じる"}
+  - {at: r-17b, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "ApprovalInProgress → Approved で別の置き場へ server-side copy"}
+  - {at: r-17b, by: I-LIFEBIT, basis: docs, url: "https://lifebit.ai/airlock/", seen: 2026-10-20, note: "承認で期限付きの download link"}
+  - {at: r-18a, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "TES へ送った JSON を TESK_Audit に残す"}
+  - {at: r-20, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "POST /v1/tasks。tags の project は必須、tres は任意(無ければ全 TRE)。通らなければ HTTP 400 と英文 1 行(TES の誤りの形ではない)"}
+  - {at: r-21, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "TRE の Agent が GetWaitingSubmissionsForTre を定期的に呼んで取りに行く(pull)"}
+  - {at: r-24, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "TES に送る前に毎回 IsUserApprovedOnProject。通らなければ InvalidUser で失敗"}
+  - {at: n-tre-agent, by: I-5STES, basis: running, url: "https://github.com/SwanseaUniversityMedical/5S-TES-Deployment", seen: 2026-10-20, note: "Hangfire で scan 1 分・sync 10 分(デモ 2 分)。動いている DemoStack のログを追って書いた文書(docs/submission-agent-sync.md)"}
+  - {at: n-ephemeral-creds, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Zeebe(Camunda 8)の Start_Credentials が DMN の規則で DB・S3 の一時アカウントを LDAP と Vault に作り、終わったら取り消す(機能フラグ EphemeralCredentials)"}
+  - {at: n-import, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "持ち込みも同じ状態の流れを通る。審査用の Airlock Import Review workspace(docs/tre-templates/workspaces/airlock-import-review.md)"}
+  - {at: n-import, by: I-GEL, basis: running, url: "https://re-docs.genomicsengland.co.uk/airlock_tool/", seen: 2026-10-20, note: "import も Airlock のサイトで申請し、承認で RE の中のフォルダへ"}
+  - {at: n-malware-scan, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "提出後に Defender for Storage で検査、見つかれば Blocked(docs/azure-tre-overview/airlock.md 147〜153 行)"}
+  - {at: n-malware-scan, by: I-GEL, basis: running, url: "https://re-docs.genomicsengland.co.uk/airlock_rules/", seen: 2026-10-20, note: "All files transferred will be checked for viruses and malware"}
+  - {at: r-pull, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "GET /api/Submission/GetWaitingSubmissionsForTre。Keycloak のアカウントから TRE を割り出す。呼ばれた時刻は生存確認にも"}
+  - {at: r-agent-tes, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "UseTESK なら TESKAPIURL に TES の JSON を POST(送り先は Funnel でもよい)、1 分ごとに GetTask(view=BASIC)"}
+  - {at: r-creds, by: I-5STES, basis: code, url: "https://github.com/SwanseaUniversityMedical/5s-Tes", seen: 2026-10-20, note: "Vault から取り出し executor の環境変数(AWS_*・MINIO_* など)に入れる"}
+  - {at: r-scan, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "Submitted の後に検査(BlockingInProgress → Blocked)"}
+  - {at: r-import, by: I-AZTRE, basis: code, url: "https://github.com/microsoft/AzureTRE", seen: 2026-10-20, note: "import の request も検査・審査を通る"}
+  - {at: r-htsget-drs, by: I-HTSGETRS, basis: code, url: "https://raw.githubusercontent.com/umccr/htsget-rs/2a91e661e6a287e3adf30e65c26a8f47697f3548/htsget-config/README.md", seen: 2026-10-20, note: "json_path(PR #357、2026-03-18)で ID から URL を引く窓口を経由。sda の文書は htsget-rs を DRS を扱えるクライアントの例に挙げる"}
+  - {at: r-rems-push, by: I-REMS, basis: code, url: "https://raw.githubusercontent.com/CSCfi/rems/fc75d7b1fd86da123b0e12f9168790d483cb91e4/resources/config-defaults.edn", seen: 2026-10-20, note: "entitlements-target で承認・取り消しを外の URL に POST(届け先の実装は不明)"}
+
+problems:
+  - id: TRE-01
+    rank: 3
+    title: 出力の持ち出し審査に標準が無い
+    certainty: policy
+    standard: 無い。TES・WES の outputs は審査を経ずに置き場へ書く前提。SATRE は手順・担当を持てと求め、Five Safes RO-Crate は記録の形だけ
+    impl: 5S-TES(TRE の MinIO に置いて Egress App で審査)・Azure TRE(airlock の状態の流れ)・Lifebit・Genomics England が自前で持つ。形はばらばらで、5S-TES は審査の結果を Five Safes RO-Crate に書かない。DNAnexus・Verily は審査せずフラグ・境界で止める
+    owner: 許可はデータを持つ機関(SATRE 3.1.06)、作業は計算の運用者。文書で揺れる
+    idea: TES の出力を審査待ちの置き場に書き、審査の結果を Five Safes RO-Crate の Disclosure として残す(推定)
+    where: [n-egress, n-review-store, r-16, r-17a, r-17b, a12, r-19, n-malware-scan]
+    gaps: [G-WES-04]
+  - id: TRE-02
+    rank: 5
+    title: DAC の承認から Visa を出すまでのつなぎが無い
+    certainty: open
+    standard: Passport は Visa の形だけ。DACReS に Passport の語が無い。DUO と Visa をつなぐ記述も無い
+    impl: REMS(試験的)・DUOS が承認から ControlledAccessGrants を出す。どちらも Visa に DUO を入れない。LS Login が REMS から Visa を取りに行く登録は手作業(メール)
+    owner: 承認は DAC、Visa Issuer を置くかはデータを持つ機関
+    idea: 承認の記録(プロジェクト・人・期限)から Visa を作る対応表を決める(推定)
+    where: [n-dac-procedure, r-14, r-12, m4]
+    gaps: [G-AAI-06, G-TES-01]
+  - id: TRE-03
+    rank: 4
+    title: 監査記録の形式と保存が無い
+    certainty: policy
+    standard: DRS・TES・WES に記録の欄・API が無い。DSIP(Dormant)と SATRE は残せと言うだけ
+    impl: 5S-TES・Azure TRE はそれぞれ独自の記録(審査者・時刻・送った JSON)。共通の形は無い。商用は「audit trail あり」と書くだけ(推定)
+    owner: 計算の運用者とデータを持つ機関に分かれる(推定)
+    idea: アクセスの発行・Task の作成・出力の承認を 1 つの形で残す(Provenance Crate に寄せる案、推定)
+    where: [n-audit, r-18a, r-18b]
+    gaps: [G-WES-01, G-AAI-06, G-TES-05]
+  - id: TRE-04
+    title: 実行環境の隔離(通信・資源の上限)の欄が無い
+    certainty: policy
+    standard: TES の tesResources に通信の遮断の欄が無い。SATRE 2.1.14・2.2.10・2.2.11(M)
+    impl: Funnel・TESK は既定で通信を遮断しない(Funnel の Docker に --network なし、TESK に NetworkPolicy なし、ram_gb は requests だけ)。Azure TRE は Firewall で既定拒否。5S-TES は一時的な資格情報と OPA で DB への道を限る
+    owner: 計算の運用者
+    idea: service-info で隔離の程度を出す独自の項目(推定)
+    where: [n-sandbox, t1, tes, n-ephemeral-creds]
+    gaps: [G-TES-01]
+  - id: TRE-05
+    rank: 1
+    title: 取り消しの空白時間
+    certainty: open
+    standard: Visa に失効の仕組みが無い(MAY)、署名付き URL は期限まで使える。yai では最長約 2 時間
+    impl: sda はキャッシュが既定 3600 秒で、その間は取り消したトークンも通る(文書)。REMS は承認・取り消しを外へ POST できる(届け先は決まっていない)。Azure TRE は承認した持ち出しを後から取り消せる
+    owner: DAC が外す → データを持つ機関が止める。間を取り持つ仕組みが無い
+    idea: 期限を短く/TRE の中では URL を外に出さない(推定)
+    where: [m6, r-14, drs, bytes, r-rems-push]
+    gaps: [G-X-02, G-DRS-10, G-TES-05]
+  - id: TRE-06
+    title: 機関をまたぐ責任分界が決まっていない
+    certainty: open
+    standard: 4 つの仕様は役割(サービス)を決めるが、どの組織が持つかは決めない。SATRE は役割だけ、Data Visiting は「provider の環境」とだけ
+    impl: 5S-TES は層ごとに Keycloak の realm を分ける。Azure TRE は Airlock Manager を誰にするか導入側に任せる。Genomics England は運用者=データを持つ機関
+    owner: 3 者(研究者の所属機関・計算の運用者・データを持つ機関)+連合の調整役
+    idea: 枠ごとに「誰が持つか」を図に出し、未定は曖昧と書く(この図の役目)
+    where: [B-OPS, B-AAI, B-FED, n-egress]
+    gaps: [G-AAI-03]
+  - id: TRE-07
+    rank: 2
+    title: TRE の外から 4 つを直接呼べる
+    certainty: open
+    standard: DRS は Bearer を認め、TES の tes_uri を直接読め、DRS を直接使える。TRE では研究者がバイト列に触れないのが前提なのに、仕様は止めない
+    impl: Azure TRE は外から触れる置き場を 1 つ(公開 stage)に限る。Funnel は認証なしで動かせる、TESK は既定が認証なし
+    owner: データを持つ機関・計算の運用者
+    idea: TRE では a15・a16 を閉じ、/access を TRE の中の実行役にだけ出す(推定)
+    where: [a15, a16, client]
+    gaps: [G-AAI-01, G-DRS-13, G-WES-04]
+  - id: TRE-08
+    title: 連合(複数の TRE)での振り分けの欄が無い
+    certainty: open
+    standard: TES・WES は 1 つのサーバーの API。どの TRE で動かすかの欄が無い
+    impl: 5S-TES だけが tags.tres と TRE Agent の取りに行く同期(pull)で振り分ける。Lifebit は「federated Airlock」を宣伝(裏付けなし)
+    owner: 連合の調整役(新)
+    idea: 5S-TES の tags の使い方を GA4GH 側に持ち込むかの検討(下書きだけ、推定)
+    where: [B-FED, r-21, r-20, r-pull, n-tre-agent]
+    gaps: [G-AAI-03]
+
+heavy_gaps:
+  - {gap: G-X-02, tre: [TRE-05], why: 出し済みの署名付き URL は期限まで使える。TRE では権限を外したらすぐ止めることが求められる}
+  - {gap: G-DRS-10, tre: [TRE-05], why: URL の期限がクライアントに分からない。TRE の運用者が持ち出しの窓の長さを管理できない}
+  - {gap: G-AAI-01, tre: [TRE-07], why: DRS が何の Bearer を受けるかが決まっていない。TRE の外から DRS を直接呼べる経路が残る}
+  - {gap: G-DRS-13, tre: [TRE-07], why: OPTIONS が認証なしで、オブジェクトの有無が誰にでも分かる。TRE では有無そのものが漏れになりうる}
+  - {gap: G-WES-04, tre: [TRE-01, TRE-07], why: tes_uri を読む資格情報が決まっていない。研究者が TES を直接読み、ログ・出力の場所を知る経路になる}
+  - {gap: G-TES-05, tre: [TRE-03, TRE-05], why: 入力の資格情報の欄が無く、署名付き URL を TES に渡すしかない。URL がログに残ると TRE の外へ持ち出せる}
+  - {gap: G-WES-01, tre: [TRE-03], why: 資格情報の受け渡しが対象外。誰の権限で DRS を読んだかが WES の記録に残らない}
+  - {gap: G-AAI-03, tre: [TRE-06, TRE-08], why: Passport の aud が任意。連合の別の TRE へ持ち込まれても区別できない}
+  - {gap: G-AAI-06, tre: [TRE-02, TRE-03], why: Passport と Visa の sub が違いうる。承認された人と実行した人が同じかを監査で示せない}
+  - {gap: G-TES-01, tre: [TRE-02, TRE-04], why: TES に誤りの応答が無い。承認されていない Project・隔離の条件に合わない Task を断る返し方が決まっていない}
+
+standards:
+  # 図に入れる 12(D-047)。places は TRE の図の場所
+  - {name: Passports, version: v1.2, status: Active, group: Data Security・DURI, in_map: true, places: [broker, ch, r-15, r-10], note: 4 つの図の AAI と同じもの。仕様として受けるのは DRS だけ}
+  - {name: DUO, version: v1.0, status: Active, group: DURI, in_map: true, places: [n-duo, r-12], note: 4 つとは仕様上つながらない}
+  - {name: Data Passports, version: 承認版なし, status: 提案, group: Data Security・DURI(Active), in_map: true, places: [n-dataset-passport, r-13], note: TRE を名指しする唯一の GA4GH の文書(提案)}
+  - {name: DACReS Toolkit, version: POL 008 v1.0・Model DAA Clauses, status: Support Ready, group: REWS・DURI, in_map: true, places: [n-dac-procedure, r-14], note: DAC の運営手順と契約の雛形}
+  - {name: Beacon v2, version: v2.0(タグ v2.2.0), status: Active, group: Discovery, in_map: true, places: [n-beacon, r-10, r-11], note: TRE に入る前に探す段階}
+  - {name: Data Connect, version: v1.0, status: Support Ready, group: Discovery, in_map: true, places: [n-dataconnect, r-09], note: DRS ID を見つける入口}
+  - {name: Service Info, version: v1.0, status: Support Ready, group: Discovery, in_map: true, places: [n-registry, r-04, r-05], note: 全部の API が $ref で使う。図では Service Registry の箱にまとめた(D-047)}
+  - {name: htsget, version: v1.3, status: Support Ready, group: Federated Analysis, in_map: true, places: [n-htsget, r-06, r-07], note: 要る部分だけ読む}
+  - {name: Crypt4GH, version: v1.0, status: Active, group: Data Security, in_map: true, places: [n-c4gh, r-08], note: 保存・転送の保護。API とはつながらない}
+  - {name: TRS, version: v2.0(タグ 2.0.2), status: Support Ready, group: Federated Analysis, in_map: true, places: [n-trs, r-01, r-02], note: 持ち込める解析を限るときに使える}
+  - {name: Data Privacy and Security Policy, version: POL 001 v2.0, status: Support Ready, group: REWS, in_map: true, places: [n-sandbox, n-audit], note: TRE の規程の土台(方針)}
+  - {name: DSIP, version: v4.0, status: Dormant, group: Data Security, in_map: true, places: [n-audit, n-sandbox, r-12], note: 監査ログ 1 年以上・鍵はデータと別の所に(推奨)}
+  # 一覧だけ
+  - {name: Machine Readable Consent Guidance, version: v1.0, status: Support Ready, group: REWS・DURI, in_map: false, note: 同意を取る段階(TRE より前)}
+  - {name: Service Registry, version: v1.0, status: Support Ready, group: Discovery, in_map: false, places: [n-registry], note: 標準としては一覧だけ。B-FED の中の箱としては描いた(D-047)}
+  - {name: Experiments Metadata Checklist, version: v1.0.0, status: Active, group: Discovery, in_map: false, note: 実験の書き方の最小のチェックリスト}
+  - {name: refget, version: Sequences v2.0・Seqcol v1.0.0, status: Active, group: Federated Analysis, in_map: false, note: 参照配列の識別(再現性)}
+  - {name: RNAget, version: v1.2, status: Active, group: Federated Analysis, in_map: false, note: 発現量の行列}
+  - {name: VRS・GKS 系, version: VRS v2.0, status: Active, group: GKS, in_map: false, note: 変異のデータモデル}
+  - {name: Framework for responsible sharing, version: 2019-09-03, status: Support Ready, group: REWS, in_map: false, note: 上の方針の土台(人権に基づく原則)}
+  - {name: Data Visiting, version: Data Sharing Lexicon 2025-02-12, status: Current, group: REWS, in_map: false, note: 方針の手引き(言葉の定義)。TES・WES・DRS・Passport の記述は 0 件。12 には数えない}

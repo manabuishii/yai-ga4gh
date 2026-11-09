@@ -1,0 +1,12 @@
+.venv/
+.uv-python/
+__pycache__/
+*.pyc
+build/
+.pytest_cache/
+.ruff_cache/
+config/*.local.yaml
+var/
+deploy/local/
+deploy/.env
+deploy/env/rootless.env

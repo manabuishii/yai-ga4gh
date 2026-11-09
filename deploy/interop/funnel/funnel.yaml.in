@@ -1,0 +1,22 @@
+# Funnel v0.11.14 config (INTEROP-TES-2). setup.sh replaces @WORK@ with the working directory as the daemon sees it
+Database: boltdb
+Compute: local
+EventWriters: [boltdb, log]
+Logger: {Level: info}
+Server:
+  HostName: funnel
+  HTTPPort: "8000"
+  RPCPort: "9090"
+  DisableHTTPCache: true
+  TaskAccess: All
+RPCClient: {ServerAddress: localhost:9090}
+Worker:
+  WorkDir: "@WORK@"
+  LeaveWorkDir: false
+  Container:
+    DriverCommand: docker
+BoltDB: {Path: "@WORK@/funnel.db"}
+LocalStorage:
+  AllowedDirs: ["@WORK@", /yai/var/tes/files]   # yai-wes outputs are written to file:///yai/var/tes/files/wes/...
+HTTPStorage:
+  Timeout: {duration: 60s}

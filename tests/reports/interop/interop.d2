@@ -1,0 +1,43 @@
+# 段階 3(相互運用)の組の図。原本は results.yaml、矢印の色と番号は tools/interop_diagram_check.py が照らす。
+# 緑=通った、黄=通ったが相手側の理由で項目が欠ける、赤=通らない(相手の未対応)、灰=やっていない
+vars: {
+  d2-config: {
+    layout-engine: tala
+  }
+}
+direction: right
+
+yai: yai (4 services) {
+  aai: yai-aai
+  drs: yai-drs
+  tes: yai-tes
+  wes: yai-wes
+}
+
+first: Partners (first 5 pairs) {
+  pytes: py-tes 1.1.4
+  funnel: Funnel v0.11.14
+  sapporo: Sapporo 2.4.0
+  pgdrs: playground DRS 5eb7745
+  playground: Passport Playground (Hydra + issuer)
+  client: yai tests (common)
+}
+
+next: Next pairs (not run) {
+  wesclient: wes-client 5.0
+  toil: Toil 9.5.0 / Galaxy 26.1.1 WES
+  nextflow: nf-ga4gh 1.5.0
+  indexd: Gen3 indexd / Galaxy DRS
+  keycloak: keycloak-ga4gh-visa-issuer / REMS
+}
+
+first.pytes -> yai.tes: "TES-1 pass [1]" {style.stroke: "#2e8b57"; style.stroke-width: 3}
+yai.wes -> first.funnel: "TES-2 pass [2,3]" {style.stroke: "#2e8b57"; style.stroke-width: 3}
+first.client -> first.sapporo: "WES-1 partial [4,5,6]" {style.stroke: "#c9a400"; style.stroke-width: 3}
+yai.wes -> first.pgdrs: "DRS-1 pass [7]" {style.stroke: "#2e8b57"; style.stroke-width: 3}
+first.playground -> yai.drs: "AAI-1 fail [8]" {style.stroke: "#c0392b"; style.stroke-width: 3}
+next.wesclient -> yai.wes: "WES-2 skip" {style.stroke: "#999999"; style.stroke-dash: 3}
+first.client -> next.toil: "WES-3 skip" {style.stroke: "#999999"; style.stroke-dash: 3}
+next.nextflow -> yai.drs: "DRS-2 skip" {style.stroke: "#999999"; style.stroke-dash: 3}
+yai.wes -> next.indexd: "DRS-3 skip" {style.stroke: "#999999"; style.stroke-dash: 3}
+next.keycloak -> yai.drs: "AAI-2 skip" {style.stroke: "#999999"; style.stroke-dash: 3}

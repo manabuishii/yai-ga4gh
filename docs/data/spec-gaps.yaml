@@ -1,0 +1,603 @@
+# 仕様の考慮漏れ・食い違いの原本。docs/spec-gaps.md と docs/diagram.html はここから tools/gen_diagram.py で作る(手で直さない)。
+# 2026-10-16 に、それまで手で書いていた docs/spec-gaps.md から写した(D-028)。
+# kind: 食い違い / 漏れ / 古い / 組み合わせ。check: 原文 / 作る / ほか(そのまま表に出す)
+# where: 図(docs/data/diagram.yaml)のどの箱・矢印の問題か。1 つ以上
+# 文字列の中の `…`・**…** は Markdown のまま(md にはそのまま、HTML では道具が直す)
+sections:
+  - {key: drs, title: DRS 1.5.0}
+  - {key: tes, title: TES 1.1}
+  - {key: wes, title: WES 1.1.0}
+  - {key: aai, title: AAI 1.2・Passport 1.2}
+  - {key: x, title: 4 つを組み合わせたとき(横断)}
+unknowns_title: 作らないと分からないもの(試験で確かめる)
+gaps:
+- id: G-DRS-01
+  section: drs
+  kind: 漏れ
+  body: ホスト名型 URI は https・443 固定で、ポートを含むのは不正。**手元の試験(http・別ポート)では仕様どおりに解決できない**。開発・試験の環境の扱いが無い
+  source: '`drs/openapi/tags/DrsApiPrinciples.md:42`'
+  yai: 4 つまとめた試験は TLS の 443(手元の CA)で仕様どおりに。単体の試験だけ「ホスト名 → URL」の上書き表を解決役に渡す(D-017)。**試験の環境でも手元の CA で仕様どおりにできる。仕様の文に開発・試験の環境の扱いが書かれていないだけ**
+  check: 原文
+  where:
+  - a56
+- id: G-DRS-02
+  section: drs
+  kind: 漏れ
+  body: compact identifier 型は identifiers.org・n2t.net への登録が前提(サーバーは MUST)。登録しない私的な運用での解決のしかたが無い(付録に「外のサイトに頼らない運用もありうる」とだけ)
+  source: '`DrsApiPrinciples.md:66`、`CompactIdentifierBasedURIs.md:65`'
+  yai: yai は compact 型を**出さない**。解決役は手元の解決表(`prefix → URL パターン`)で解決する。試験用 prefix `yaitest.drs` は実在の prefix と重ならないことを identifiers.org で確かめてから使う(仮)
+  check: 原文
+  where:
+  - a56
+- id: G-DRS-03
+  section: drs
+  kind: 食い違い
+  body: Auth 節と `PassportAuth` の説明は「`tokens[]` 配列」、操作の本文の定義は `passports`
+  source: '`drs/openapi/data_repository_service.openapi.yaml:144`、`drs/openapi/tags/Auth.md:60`、`components/requestBodies/Passports.yaml:7`'
+  yai: 操作の定義(`passports`)を正とする(計画 第 2 版から)。`tokens` で来たら 400(黙って読まない)
+  check: 原文
+  where:
+  - a56
+  - a16
+- id: G-DRS-04
+  section: drs
+  kind: 食い違い
+  body: PostObject の 404 が `404NotFoundAccess`(「アクセスが無い」)を指す。GetObject は `404NotFoundDrsObject`
+  source: '`paths/objects@{object_id}.yaml` の PostObject'
+  yai: 中身はどちらも `Error`。yai は「オブジェクトが無い」の文で返す
+  check: 原文
+  where:
+  - drs
+- id: G-DRS-05
+  section: drs
+  kind: 食い違い
+  body: '一括の操作の説明は「Passport か 1 つの Bearer」と言うが、`security` には `PassportAuth` だけ。`PassportAuth` は `x-in: body` という独自の拡張で、OpenAPI の道具は理解しない'
+  source: '`paths/bulkobjects@{object_id}.yaml`、`drs/openapi/data_repository_service.openapi.yaml:137-144`'
+  yai: 一括でも Bearer を受ける(説明文を正とする)。形の検査の道具には `PassportAuth` を「本文の `passports`」と読み替える設定を置く
+  check: 原文
+  where:
+  - drs
+  - a16
+- id: G-DRS-06
+  section: drs
+  kind: 食い違い
+  body: '`maxBulkRequestLength` が根(非推奨と書きつつ `required`)と `drs` の下(これも `required`)の両方で必須'
+  source: '`components/schemas/DrsService.yaml:2-4,22-24`'
+  yai: 両方に同じ値を出す
+  check: 原文
+  where:
+  - drs
+- id: G-DRS-07
+  section: drs
+  kind: 漏れ
+  body: 「blob では `access_methods` が要る」「`access_url` と `access_id` の少なくとも一方」は説明文だけで、schema では強制されない
+  source: '`DrsObject.yaml`、`AccessMethod.yaml:20,26`'
+  yai: yai の試験(b 層)で確かめる。形の検査では見えないので義務の表に入れた(DRS-OBJ-02・DRS-AM-01)
+  check: 原文
+  where:
+  - drs
+- id: G-DRS-08
+  section: drs
+  kind: 漏れ
+  body: '`PassportAuth` を含むときの `passport_auth_issuers` は「必須」と説明文だけ'
+  source: '`drs/openapi/components/schemas/Authorizations.yaml:22`'
+  yai: 必ず出す。値は「Visa の `iss`」で、Passport の Broker ではない点に注意(Visa Issuer の一覧を出す)
+  check: 原文
+  where:
+  - drs
+  - ch
+- id: G-DRS-09
+  section: drs
+  kind: 漏れ
+  body: 一括で一部だけ解決できないときの `unresolved_drs_objects[].error_code` の意味(HTTP の状態コードか)が書かれていない。全部が無いときに 200 か 404 かも書かれていない
+  source: '`components/schemas/unresolved.yaml`、`paths/bulkobjects@{object_id}.yaml`'
+  yai: '`error_code` は HTTP の状態コード(404・403)。1 つも解決できなくても 200 で、全部を `unresolved_drs_objects` に入れる(仮 D-021。初めは「全件失敗は 404」としたが、失敗の理由が消えるのでレビューで直した)。**他の実装がどうしているかは作って比べる**'
+  check: 作る
+  where:
+  - drs
+- id: G-DRS-10
+  section: drs
+  kind: 漏れ
+  body: '`AccessURL` に**期限の欄が無い**。クライアントは署名付き URL がいつまで使えるか分からない'
+  source: '`components/schemas/AccessURL.yaml`'
+  yai: 期限は yai の設定(既定 60 分、D-019)。URL ごとの期限は問い合わせ部分の `exp`(エポック秒、yai の URL の形で仕様の契約ではない)。service-info には出さない(D-063、D-040 と同じく相互運用を優先)
+  check: 原文
+  where:
+  - a08
+  - a11
+- id: G-DRS-11
+  section: drs
+  kind: 古い
+  body: PostObject・PostAccessURL の説明が「formData で Passport を送る」と言うが、本文は `application/json`
+  source: '`paths/objects@{object_id}.yaml`、`paths/objects@{object_id}@access@{access_id}.yaml`'
+  yai: JSON だけを受ける
+  check: 原文
+  where:
+  - drs
+- id: G-DRS-12
+  section: drs
+  kind: 古い
+  body: '`BulkObjectSingleAccessId.yaml` はどこからも参照されていない'
+  source: '`components/parameters/BulkObjectSingleAccessId.yaml`'
+  yai: 使わない
+  check: 原文
+  where:
+  - drs
+- id: G-DRS-13
+  section: drs
+  kind: 漏れ
+  body: 'OPTIONS は認証なし(`security: [{}]`)で、オブジェクトの有無が誰にでも分かる。「見せない」方針と両立しない'
+  source: '`paths/objects@{object_id}.yaml` OptionsObject'
+  yai: 受け入れる(学習用で隠すデータが無い)。他人の資源を 404 にする方針(D-013)は TES・WES だけ
+  check: 原文
+  where:
+  - drs
+  - a16
+- id: G-DRS-14
+  section: drs
+  kind: 漏れ
+  body: 'service-info の例は `"version": "1.5"`。`type.version` に何を書くか(`1.5`・`1.5.0`)が決まっていない'
+  source: '`drs/openapi/paths/service-info.yaml:26` の例'
+  yai: '`1.5.0`(タグの版)。相互運用の相手が `1.5` を期待するかは作って確かめる'
+  check: 作る
+  where:
+  - drs
+- id: G-DRS-15
+  section: drs
+  kind: 漏れ
+  body: '**壊れた資格情報と無い ID が重なったとき、401 と 404 のどちらを返すか**(確かめる順)が決まっていない。GetObject・PostObject・GetAccessURL・PostAccessURL の応答の一覧には 401・403・404 が並ぶだけで、説明は「The request is unauthorized.」「The requested `DrsObject` wasn''t found.」だけ。認可の方針は実装が決めて執行する、とあるだけ(コードのレビューで見つけた、2026-10-16)'
+  source: '`drs/openapi/paths/objects@{object_id}.yaml:42・46`(GetObject の 401・404)、`:70・74`(PostObject)、`drs/openapi/paths/objects@{object_id}@access@{access_id}.yaml:16・20・49・53`、`drs/openapi/components/responses/401Unauthorized.yaml:1`、`404NotFoundDrsObject.yaml:1`、`drs/openapi/tags/Auth.md:3`'
+  yai: '**資格情報の検査(壊れていれば 401)→ 有るか(404)→ 方針(401・403)**(案 A、D-025)。壊れた資格情報を黙って無視しない(`permissions.yaml` の public の note)と合う。どちらの順でも、資格情報なしで ID の有無が分かるのは同じ(資格情報なしの無い ID は 404)。GA4GH への質問の下書き: `docs/questions/2026-10-16_drs-401-vs-404.md`(投稿していない)'
+  check: 原文
+  where:
+  - drs
+  - ch
+- id: G-DRS-16
+  section: drs
+  kind: 漏れ
+  body: '`AccessMethod.type`(https など)と `AccessURL.url` のスキームが一致することを求める文が無い。ga4gh/passport-playground-drs(5eb7745)は `type: https` で `http://…` の URL を返す(INTEROP-DRS-1、2026-10-17)'
+  source: '`drs/openapi/components/schemas/AccessMethod.yaml`・`AccessURL.yaml`'
+  yai: 'yai-drs は type と URL のスキームを揃える(https)。yai-tes は取る URL のスキームを自分で見て https 以外は断る(試験の設定 `insecure_http_hosts` だけ http)。`type` は信用しない'
+  check: 原文
+  where:
+  - a56
+- id: G-TES-01
+  section: tes
+  kind: 漏れ
+  body: '**誤りの応答が 1 つも定義されていない**(全操作が 200 だけ)。認証の失敗・無いタスク・不正な要求の返し方が無い'
+  source: '`tes/task_execution_service.openapi.yaml` の paths'
+  yai: DRS・WES と同じ `{msg, status_code}` で 400・401・403・404・500 を返す(D-011)。公式の試験道具(openapi-test-runner)が 4xx をどう扱うかは作って確かめる
+  check: 作る
+  where:
+  - tes
+  - a10
+  - a15
+- id: G-TES-02
+  section: tes
+  kind: 漏れ
+  body: 終わったタスク(COMPLETE など)への CancelTask の結果が決まっていない。CANCELING と CANCELED の境目(「片付け」が何か)も実装しだい
+  source: '`tes/…` CancelTask、`tesState` の説明'
+  yai: 終わったものへの取り消しは 200 で何もしない(D-020)。CANCELING → CANCELED は「コンテナを止めて消し、作業ディレクトリを消した」とき
+  check: 原文
+  where:
+  - tes
+  - a13
+- id: G-TES-03
+  section: tes
+  kind: 漏れ
+  body: '`page_size` が 2048 以上・0・負のときの扱いが無い'
+  source: '`tes/…:161`'
+  yai: 400(仮)。他の実装は切り詰めるかもしれない → 相互運用の試験で比べる
+  check: 作る
+  where:
+  - tes
+- id: G-TES-04
+  section: tes
+  kind: 漏れ
+  body: 読み取り専用の項目(`id`・`state`・`logs`・`creation_time`)を CreateTask に入れて送ったときの扱い(無視か 400 か)
+  source: '`tes/…` `readOnly`'
+  yai: 無視して、サーバーが付けたもので上書き(OpenAPI の readOnly の意味どおり)
+  check: 原文
+  where:
+  - tes
+  - a10
+- id: G-TES-05
+  section: tes
+  kind: 漏れ
+  body: 入力・出力の取得に使う資格情報を渡す欄が無い(`tesInput` は `url` だけ、ヘッダーも無い)
+  source: '`tes/…` `tesInput`'
+  yai: 署名付き URL で渡す(D-007、`system.md` 3 節)。TES 自身が DRS を解決するのは「あとで深める」の独自拡張
+  check: 原文
+  where:
+  - a10
+  - a11
+- id: G-TES-06
+  section: tes
+  kind: 漏れ
+  body: 入力のチェックサムを確かめる欄が無い
+  source: '`tes/…` `tesInput`'
+  yai: 最小版は確かめない。深める段階で検討(`system.md` C-05)
+  check: 原文
+  where:
+  - a11
+- id: G-TES-07
+  section: tes
+  kind: 古い
+  body: '`tesOutputFileLog.size_bytes` は文字列(「JSON が int64 を扱えないため」と注記)'
+  source: '`tes/…` `size_bytes`'
+  yai: 文字列で返す。読むときは整数に直す
+  check: 原文
+  where:
+  - tes
+- id: G-TES-08
+  section: tes
+  kind: 食い違い
+  body: '`view` の説明が `tesTask.Id`・`tesTask.State`(大文字始まり)と書くが、項目名は `id`・`state`'
+  source: '`tes/task_execution_service.openapi.yaml:257`'
+  yai: 項目名(小文字)を正とする
+  check: 原文
+  where:
+  - tes
+- id: G-TES-09
+  section: tes
+  kind: 漏れ
+  body: サーバーの再起動で実行中のタスクがどうなるかが無い(`logs` は「再試行で追加される」とだけ)
+  source: '`tes/…` `logs`'
+  yai: 再起動のとき、実行役の Docker のラベルからタスクを突き合わせて状態を戻す。突き合わせられないものは `SYSTEM_ERROR`(`tes.md` 4 節)
+  check: 作る
+  where:
+  - tes
+  - runner
+- id: G-TES-10
+  section: tes
+  kind: 漏れ
+  body: '`PAUSED`・`PREEMPTED` に入る条件・出る条件が無い'
+  source: '`tesState`'
+  yai: yai は**使わない**(この 2 つの状態にはしない)
+  check: 原文
+  where:
+  - tes
+- id: G-TES-11
+  section: tes
+  kind: 古い
+  body: 応答コードが引用符なしの `200:`。YAML としては整数のキーになり、OpenAPI(文字列のキー)として厳しく読む道具は落ちる
+  source: '`tes/task_execution_service.openapi.yaml:82` ほか'
+  yai: 形の検査・生成の前処理で文字列のキーに直す(1 か所、`language.md` 3 節)
+  check: 原文
+  where:
+  - tes
+- id: G-TES-12
+  section: tes
+  kind: 食い違い
+  body: '`view=MINIMAL` は「`id` と `state` だけ」を返すと決めるが、`tesTask` の schema は `executors` を必須にし、ListTasks・GetTask の応答はその schema を指す。MINIMAL の応答は schema の検査に通らない(段階 1 の試験で 2026-10-16 に見つけた)'
+  source: '`tes/task_execution_service.openapi.yaml:256`(view)、`tesTask` の `required`'
+  yai: view の説明を正とし、MINIMAL では `id`・`state` だけを返す。形の検査は MINIMAL の応答だけ「鍵が `id`・`state` の 2 つ」で照らす(`tests/shape.py`)。BASIC・FULL は schema で照らす
+  check: 作る
+  where:
+  - tes
+  - a13
+- id: G-TES-13
+  section: tes
+  kind: 漏れ
+  body: '`tesTaskLog`・`tesExecutorLog` の `start_time`・`end_time` は「`type: string`、RFC 3339」とだけで、**まだ無いとき**の表し方(省く / null / 空文字)が無い。Funnel v0.11.14 は protobuf の JSON 化の既定で `""` を返す(INTEROP-TES-2 で yai-wes が落ちた、2026-10-17)'
+  source: '`tes/task_execution_service.openapi.yaml:395`・`:856`'
+  yai: 'WES の engine は、文字列でない・空・RFC 3339 として読めない時刻を「無い」(null)として run を落とさない(`yai/wes/engine.py`、試験 `test_INT_TIME_EMPTY`)。yai-tes は無い時刻を省く'
+  check: 原文
+  where:
+  - a13
+- id: G-WES-01
+  section: wes
+  kind: 漏れ
+  body: ジョブの入出力用の資格情報の受け渡しは**対象外**(「DOS の作業で扱う予定」とある)
+  source: '`wes/workflow_execution_service.openapi.yaml:53`'
+  yai: multipart の yai 独自の項目 `yai_passports` で Passport を預かり(D-009)、DRS の解決は WES がする(D-007)。長い run での Passport の取り直しは「あとで深める」
+  check: 原文
+  where:
+  - a04
+  - a56
+- id: G-WES-02
+  section: wes
+  kind: 食い違い
+  body: '`RunRequest.workflow_params` は説明で REQUIRED、schema の `required` には無い。multipart では文字列(JSON を文字列で)、`RunRequest` では object。`requestBody` 自体が `required: false`'
+  source: '`wes/…:265,287,737-746`'
+  yai: '`workflow_params` は必須(無ければ 400)。multipart の文字列を JSON として読み、`RunLog.request` では object で返す'
+  check: 原文
+  where:
+  - a04
+- id: G-WES-03
+  section: wes
+  kind: 組み合わせ
+  body: WES の `Log.stdout` は URL、TES の `ExecutorLog.stdout` は中身の文字列
+  source: '`wes/…:844`、`tes/…` `tesExecutorLog`'
+  yai: WES が中身を返す自分の URL を作る(`system.md` C-08)
+  check: 原文
+  where:
+  - a13
+  - wes
+- id: G-WES-04
+  section: wes
+  kind: 漏れ
+  body: '`TaskLog.tes_uri` は任意で、それを読むための資格情報が決まっていない'
+  source: '`wes/…:930`'
+  yai: '`system.md` C-12'
+  check: 原文
+  where:
+  - a15
+- id: G-WES-05
+  section: wes
+  kind: 漏れ
+  body: '`workflow_type` は「CWL か WDL か、その WES が対応する別のもの」。別のものの名前の決まりが無い'
+  source: '`wes/…:247`'
+  yai: '最小版のエンジンの形は D-014(決定: yai 内蔵の CWL の部分集合。`workflow_type=CWL`)'
+  check: 原文
+  where:
+  - wes
+- id: G-WES-06
+  section: wes
+  kind: 古い
+  body: '`State` の説明が TES からの写しで、「Executor」「output files uploaded」などワークフローに合わない語を使う'
+  source: '`wes/…` `State`'
+  yai: 意味は `docs/data/wes-states.yaml` で yai が定める(run の状態は全タスクから決める)
+  check: 原文
+  where:
+  - wes
+- id: G-WES-07
+  section: wes
+  kind: 漏れ
+  body: 終わった run への CancelRun の結果が決まっていない
+  source: '`wes/…` CancelRun'
+  yai: 200 で RunId を返し、何もしない(D-020)
+  check: 原文
+  where:
+  - wes
+  - a14
+- id: G-WES-08
+  section: wes
+  kind: 漏れ
+  body: 他人の run を指定されたとき 403 か 404 か(両方が一覧にある)
+  source: '`wes/…` GetRunLog など'
+  yai: 404(D-013)
+  check: 原文
+  where:
+  - a14
+- id: G-WES-09
+  section: wes
+  kind: 古い
+  body: 「Data Object Service(DOS)」は DRS の旧名
+  source: '`wes/…:53`'
+  yai: 読み替える
+  check: 原文
+  where:
+  - wes
+- id: G-WES-10
+  section: wes
+  kind: 漏れ
+  body: run の一覧の「安定した並び」と「最初のページの時点の一覧」を、どう実現するかが無い(新しい run が途中で増えたとき)
+  source: '`wes/…:183`'
+  yai: ページの印に「最初のページを求めた時刻」と「最後に返した ID」を入れる(`docs/data/paging.yaml`)。G-X-04 も同じ
+  check: 原文
+  where:
+  - a14
+- id: G-WES-11
+  section: wes
+  kind: 漏れ
+  body: ListTasks(`/runs/{run_id}/tasks`)は `page_size`・`page_token` を受けるのに、応答の一覧に 400 が無い(200・401・403・404・500 だけ)。壊れた・改ざんされた `page_token`、範囲の外の `page_size` を返す状態コードが無い(段階 1 の WES で 2026-10-16 に見つけた)
+  source: '`wes/workflow_execution_service.openapi.yaml:417`(ListTasks の responses)'
+  yai: ListRuns と同じく **400** を返す(`paging.yaml` と test-plan の NEG-PAGING-TAMPER に合わせる)。「状態コードは一覧にあるものだけ」(`wes.md` 6 節)からはこの 1 か所だけ外れる(D-027、ユーザー 2026-10-16 08:52 決定)
+  check: 作る
+  where:
+  - a14
+- id: G-WES-12
+  section: wes
+  kind: 漏れ
+  body: GetRunLog の `request` は型が `RunRequest` とあるだけで、送られた要求をそのまま返すのか、秘密(`workflow_url`・File の `location` に入る署名付き URL の問い合わせ部分)を伏せてよいのかが無い。run が終わったあと、いつまで持つかも無い
+  source: '`wes/workflow_execution_service.openapi.yaml:799`(RunLog の `request`)'
+  yai: run が終わったら問い合わせ部分を消し、伏せた形を返す(D-030 案 A、ユーザー 2026-10-16 決定)。終わる前は送られたまま返す。保存した文書・添付も run が終わったら消す(D-030 の拡張、2026-10-17)
+  check: 原文
+  where:
+  - wes
+  - a14
+- id: G-WES-13
+  section: wes
+  kind: 漏れ
+  body: '`GET /runs/{run_id}` などの 404 は「The requested workflow run not found」とだけで、**形が違う run_id**(UUID でない等)の扱いが無い。Sapporo 2.4.0 は 400 `Invalid run_id format`、yai は 404(INTEROP-WES-1、2026-10-17)'
+  source: '`wes/workflow_execution_service.openapi.yaml:356`'
+  yai: 無い run は形にかかわらず 404(id の形を外に見せない)。相手が 400 を返しても「無い」と読めるよう、相互運用の報告に残す
+  check: 原文
+  where:
+  - wes
+- id: G-AAI-01
+  section: aai
+  kind: 組み合わせ
+  body: AAI 1.2 では Passport-Scoped Access Token はクライアントと Broker の間だけで使う。一方 DRS は `BearerAuth` を認めるが、その Bearer が何であるべきかは決めていない
+  source: '`aai/AAIConnectProfile.md:328`、DRS `Auth.md`'
+  yai: DRS の Bearer は yai の AT(`aud=yai-drs`)だけ。PSAT が来たら(`scope` に `ga4gh_passport_v1`)401
+  check: 原文
+  where:
+  - a16
+  - a02
+- id: G-AAI-02
+  section: aai
+  kind: 古い
+  body: Visa Access Token は「将来消す提案」。1 時間の規則と Polling が要る
+  source: '`aai/AAIConnectProfile.md:570,574,700-708`'
+  yai: 受けない(`scope` を持つ Visa は無視)。Visa Document Token だけ
+  check: 原文
+  where:
+  - ch
+  - m5
+- id: G-AAI-03
+  section: aai
+  kind: 漏れ
+  body: Passport の `aud` は任意。どのサービスあての Passport か分からないと、別のサービスに持ち込まれても区別できない
+  source: '`aai/…` Passport Format の `aud`'
+  yai: 試験用 Broker は `aud` を付ける。yai-drs は有れば自分を含むことを要求。無いものを受けるかは設定(既定は受ける、仮)。省いたときは yai-drs の起動で WARNING(D-055)
+  check: 原文
+  where:
+  - a56
+  - ch
+- id: G-AAI-04
+  section: aai
+  kind: 組み合わせ
+  body: '秘密を含む応答に `Cache-Control: no-store` などを求めるのは「クライアント・アプリ」の節。DRS の `/access`(署名付き URL を返す)は対象と書かれていない'
+  source: '`aai/…:443-448`'
+  yai: 署名付き URL も秘密として扱い、yai-drs の `/access` 系の応答に同じヘッダーを付ける
+  check: 原文
+  where:
+  - a08
+- id: G-AAI-05
+  section: aai
+  kind: 古い
+  body: Visa の `typ` は AAIv1.2 タグの時点では必須、その後の Passport の文書(a4ee601)で任意に。版の番号は同じ 1.2 のまま
+  source: '`passport/ga4gh_passport_v1.md` `typ` の節、`specs/SOURCES.yaml`'
+  yai: いまの文書(任意)に従う。有るなら `vnd.ga4gh.visa+jwt` であること
+  check: 原文
+  where:
+  - ch
+  - visa-issuer
+- id: G-AAI-06
+  section: aai
+  kind: 漏れ
+  body: Passport の `sub` と Visa の `sub` は違いうる。複数の身元の Visa を組み合わせるなら LinkedIdentities が要る
+  source: '`aai/…` Passport Format の `sub`、`passport/…:192-196`'
+  yai: 最小版は 1 つの判断に 1 つの Visa だけを使い、組み合わせない。複数の Visa が要る方針は LinkedIdentities を作るまで書かない
+  check: 原文
+  where:
+  - ch
+- id: G-AAI-07
+  section: aai
+  kind: 古い
+  body: Passport の文書が AAI の「Token Revocation」の節へ張っているが、AAI 1.2 にその節は無い
+  source: '`passport/…:1050`、`aai/…` の見出し一覧'
+  yai: Passport の文書の本文(`asserted`・`exp` を確かめる)だけに従う
+  check: 原文
+  where:
+  - ch
+- id: G-AAI-08
+  section: aai
+  kind: 漏れ
+  body: WES・TES の Bearer と AAI の関係が無い(どのトークンを受けるべきか)
+  source: WES `:49`、TES `:56`
+  yai: yai の AT(D-008)。Passport を Bearer にしない
+  check: 原文
+  where:
+  - a04
+  - a14
+  - a15
+  - at-issuer
+- id: G-AAI-09
+  section: aai
+  kind: 漏れ
+  body: Broker が OIDC の認可コードの流れを持つこと(MUST)と、試験用の最小 Broker との差
+  source: '`aai/…` Conformance for Brokers'
+  yai: 試験用 Broker は認可コードの流れを持たない(固定の利用者表)。**yai-aai の Broker は AAI に適合しない**と明記し、適合の主張は Clearinghouse の部品だけ
+  check: 原文
+  where:
+  - broker
+  - a01
+- id: G-AAI-10
+  section: aai
+  kind: 漏れ
+  body: Passport の大きさ・1 つの要求の Passport の個数・Passport の中の Visa の個数に上限の決まりが無い。PP-CH-01 の「必要な検査」(AAI の仕様が決める)にも無い。Clearinghouse は信頼した Broker の Passport でも、Visa の数だけ署名を確かめることになる
+  source: '`passport/ga4gh_passport_v1.md:171-179`(Clearinghouse の処理)、`aai/…` Passport Format'
+  yai: 1 つの要求の Passport は 10 個まで・1 つ 64 KiB まで(超えたら 400)。Visa は 1 つの Passport に 100 個まで(超えたら Passport ごと拒否、D-058 仮)。PP-CH-02(要らない Visa は無視)の意図とずれることを承知で、資源の備え(AAI-CH-04)を優先する
+  check: 原文
+  where:
+  - ch
+- id: G-X-01
+  section: x
+  kind: 組み合わせ
+  body: WES 1.1.0 は「入力の URL を WES が取りに行ける」ことを求めるが、DRS の資格情報(Passport)を WES に渡す方法は無い。DRS の URI を WES に渡すことは DRS 側が想定している(「WES に渡すときの便利のため URI を定義」)
+  source: '`DrsApiPrinciples.md:13`、WES `:53`'
+  yai: '`system.md` 3 節の (a)'
+  check: 原文
+  where:
+  - a04
+  - a56
+- id: G-X-02
+  section: x
+  kind: 組み合わせ
+  body: Passport は「期限までに(か少し後に)アクセスを止める」ことを求める。署名付き URL は出したら期限まで使える
+  source: '`passport/…:1060-1066`、DRS の取り方の 4 番目'
+  yai: Option B で、署名付き URL の期限 = 許容する遅れ(既定 60 分)。Visa の残りがそれより短ければ URL を出さない
+  check: 原文
+  where:
+  - a08
+  - a11
+  - ch
+- id: G-X-03
+  section: x
+  kind: 組み合わせ
+  body: 時刻の形が 3 つ(RFC 3339・`%Y-%m-%dT%H:%M:%SZ`・エポック秒)
+  source: DRS `DrsObject.yaml`、WES `:722`、AAI
+  yai: 内部は UTC の秒、外へ出すときに各形(D-015)
+  check: 原文
+  where:
+  - a13
+  - a56
+- id: G-X-04
+  section: x
+  kind: 組み合わせ
+  body: 'ページの終わりの合図: WES は「空文字」、TES は書いていない'
+  source: WES `:904,960`、TES `:163-170`
+  yai: yai-tes は出さない、yai-wes は空文字を出す。読む側は両方を終わりと読む
+  check: 作る(相互運用の相手が何を返すか)
+  where:
+  - a13
+  - a14
+- id: G-X-05
+  section: x
+  kind: 組み合わせ
+  body: DRS の `AccessURL.headers`(ヘッダー付きで取る)を TES の入力に渡せない
+  source: DRS `AccessURL.yaml`、TES `tesInput`
+  yai: ヘッダーなしの署名付き URL だけを TES に渡す(`system.md` C-03)
+  check: 原文
+  where:
+  - a08
+  - a10
+- id: G-X-06
+  section: x
+  kind: 漏れ
+  body: 3 つの service-info の `type.version` の形(`1.5`・`1.5.0`・`1.1.0`)がそろっていない
+  source: DRS の例、TES・WES の `info.version`
+  yai: 各 OpenAPI の `info.version`(`1.5.0`・`1.1.0`・`1.1.0`)
+  check: 作る
+  where:
+  - drs
+  - tes
+  - wes
+- id: G-X-07
+  section: x
+  kind: 食い違い
+  body: 同じ GA4GH の service-info 1.0.0 の拡張なのに、WES 1.1.0 の `ServiceInfo` は `tags`(string→string)を **required** とし、TES 1.1 の `tesServiceInfo` には `tags` が無い(`tags` は Task にだけ)。追加の項目は schema で禁じられていないが、TES の厳密なクライアント(py-tes 1.1.4 の attrs の型)は知らない項目を拒む(INTEROP-TES-1、2026-10-17)
+  source: '`wes/workflow_execution_service.openapi.yaml:638`・`:651`(required)、`tes/task_execution_service.openapi.yaml:660`(tesServiceInfo)・`:801`(Task の tags)'
+  yai: WES の service-info には `tags` を入れ、TES の service-info には入れない(D-040、ユーザー 2026-10-17 15:51)。実行役の種類は TES の `description` に書く
+  check: 原文
+  where:
+  - tes
+  - wes
+unknowns:
+- thing: 公式の TES の試験道具が 4xx をどう見るか(G-TES-01)
+  what: yai の誤りの応答で落ちないか
+  test: CONF-TES
+- thing: DRS の試験道具(1.2.0 用)が 1.5.0 のサーバーのどこで落ちるか
+  what: 落ちる項目の一覧と、版の違いによるものか
+  test: CONF-DRS
+- thing: 他の TES が署名付き URL(クエリ付きの https)を取れるか
+  what: Funnel などに yai-drs の URL を渡す
+  test: INTEROP-TES-HTTPS
+- thing: 他の WES が `drs://` の入力を扱えるか、資格情報をどう受けるか
+  what: 相手の実装を読む・動かす
+  test: INTEROP-WES-DRS
+- thing: 一括の部分的な失敗・ページの終わり・`page_size` の上限の扱い
+  what: 相手と yai で同じ入力を比べる
+  test: INTEROP-EDGE
+- thing: 再起動のときの突き合わせ(G-TES-09)
+  what: 実行中に yai-tes を止めて上げる
+  test: NEG-RESTART
+- thing: 取り消しと完了が重なったとき
+  what: 終わる直前に取り消す
+  test: NEG-CANCEL-RACE
+- thing: エンジンから WES のタスク情報が取れるか(D-014 の後)
+  what: 選んだエンジンで 1 ステップ・2 ステップ
+  test: SPIKE-ENGINE
