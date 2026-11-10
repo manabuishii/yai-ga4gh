@@ -29,6 +29,59 @@ POINTS = ("before_executor_start", "before_executor_record", "after_executor_sta
           "before_complete_write")  # fmt: skip
 
 
+def test_old_delegated_rows_become_owner_and_actor(tmp_path):
+    """A file written before D-067 marked delegation with on_behalf_of (owner = the service):
+    opening it rewrites those rows (owner = the user, actor = the service, tag dropped) and
+    leaves rows without on_behalf_of alone. A task left RUNNING by an older version loses the
+    query of its input URLs (D-068)."""
+    import json
+    import sqlite3
+
+    path = tmp_path / "tes.sqlite"
+    TesDb(path)  # current schema
+    db = sqlite3.connect(path)
+    db.execute("ALTER TABLE tasks ADD COLUMN on_behalf_of TEXT")
+    db.execute("ALTER TABLE output_files ADD COLUMN on_behalf_of TEXT")
+    old = json.dumps({"executors": [], "tags": {"yai.on_behalf_of": "https://a/|alice",
+                                                "yai.run_id": "r1"}})  # fmt: skip
+    running = json.dumps({"executors": [], "inputs": [{"url": "https://d/x?sig=CANARY"}]})
+    rows = [
+        ("t1", "https://a/", "yai-wes", "https://a/|alice", "COMPLETE", old),
+        ("t2", "https://a/", "yai-wes", "https://a/|bob", "RUNNING", running),
+        ("t3", "https://a/", "carol", None, "QUEUED", "{}"),
+    ]
+    for tid, iss, sub, obo, state, raw in rows:
+        db.execute(
+            "INSERT INTO tasks (id, owner_iss, owner_sub, on_behalf_of, state, created_at,"
+            " task_json) VALUES (?, ?, ?, ?, ?, 0, ?)",
+            (tid, iss, sub, obo, state, raw),
+        )
+    db.execute(
+        "INSERT INTO output_files (task_id, url, path, size_bytes, owner_iss, owner_sub,"
+        " on_behalf_of) VALUES ('t1', 'file:///o/1', '/o', 1, 'https://a/', 'yai-wes',"
+        " 'https://a/|alice')"
+    )
+    db.commit()
+    db.close()
+    TesDb(path)  # reopen: migration
+    db = sqlite3.connect(path)
+    got = {r[0]: r[1:] for r in db.execute(
+        "SELECT id, owner_sub, actor, on_behalf_of, task_json FROM tasks")}  # fmt: skip
+    assert got["t1"][:3] == ("alice", "https://a/|yai-wes", None)
+    assert "yai.on_behalf_of" not in got["t1"][3] and "r1" in got["t1"][3]
+    assert got["t2"][:3] == ("bob", "https://a/|yai-wes", None)
+    assert "CANARY" not in got["t2"][3] and "https://d/x" in got["t2"][3]
+    assert got["t3"][:3] == ("carol", None, None)
+    out = db.execute("SELECT owner_sub, actor FROM output_files WHERE task_id='t1'").fetchone()
+    assert out == ("alice", "https://a/|yai-wes")
+    db.close()
+    TesDb(path)  # a second opening changes nothing more
+    db = sqlite3.connect(path)
+    left = db.execute("SELECT COUNT(*) FROM tasks WHERE on_behalf_of IS NOT NULL").fetchone()[0]
+    assert left == 0
+    db.close()
+
+
 def make_env(tmp, fault: str | None, **extra) -> SimpleNamespace:
     cfg = {
         "data_dir": str(tmp / "tes-data"),
@@ -148,12 +201,28 @@ def test_restart_after_terminal_write_cleans_up(tmp_path):
         stop_all(env)
 
 
+def test_running_write_redacts_input_urls(tmp_path):
+    """D-068: once the inputs are fetched (INITIALIZING -> RUNNING), the same write removes the
+    query part of input URLs; a restart from RUNNING resumes executors and does not fetch again.
+    inputs[].content stays until the end (D-043)."""
+    db = TesDb(tmp_path / "tes.sqlite")
+    body = {"inputs": [{"path": "/d/in", "url": "https://h.test/x?sig=CANARY"},
+                       {"path": "/d/c", "content": "keep"}]}  # fmt: skip
+    db.create("t1", ("i", "s"), body, 0, actor=None, run_id=None, nonce=None)
+    assert db.transition("t1", "QUEUED", "INITIALIZING")
+    assert "CANARY" in db.get("t1").task["inputs"][0]["url"]  # type: ignore[union-attr]
+    assert db.transition("t1", "INITIALIZING", "RUNNING")
+    task = db.get("t1").task  # type: ignore[union-attr]
+    assert task["inputs"][0]["url"] == "https://h.test/x" and task["inputs"][1]["content"] == "keep"
+    assert not db.transition("t1", "INITIALIZING", "RUNNING")  # conditional, as before
+
+
 def test_terminal_write_redacts_input_urls(tmp_path):
     """The same write as the final state removes the query part of input URLs (no window where
     it remains after finishing)."""
     db = TesDb(tmp_path / "tes.sqlite")
     body = {"inputs": [{"path": "/d/in", "url": "https://h.test/x?sig=CANARY"}]}
-    db.create("t1", ("i", "s"), body, 0, on_behalf_of=None, run_id=None, nonce=None)
+    db.create("t1", ("i", "s"), body, 0, actor=None, run_id=None, nonce=None)
     assert db.transition("t1", "QUEUED", "INITIALIZING")
     assert "CANARY" in db.get("t1").task["inputs"][0]["url"]  # type: ignore[union-attr]
     assert db.transition("t1", "INITIALIZING", "SYSTEM_ERROR")
@@ -173,7 +242,7 @@ def test_terminal_write_drops_input_content(tmp_path, end):
     db = TesDb(tmp_path / "tes.sqlite")
     body = {"inputs": [{"name": "a", "path": "/d/a", "type": "FILE", "content": "CANARY"},
                        {"name": "b", "path": "/d/b", "url": "https://h.test/b"}]}  # fmt: skip
-    db.create("t1", ("i", "s"), body, 0, on_behalf_of=None, run_id=None, nonce=None)
+    db.create("t1", ("i", "s"), body, 0, actor=None, run_id=None, nonce=None)
     frm = "QUEUED"
     for to in ENDS[end]:
         assert db.get("t1").task["inputs"][0]["content"] == "CANARY"  # type: ignore[union-attr]
@@ -187,7 +256,7 @@ def test_terminal_write_drops_input_content(tmp_path, end):
 def test_running_to_running_keeps_input_content(tmp_path):
     db = TesDb(tmp_path / "tes.sqlite")
     body = {"inputs": [{"path": "/d/a", "content": "CANARY"}]}
-    db.create("t1", ("i", "s"), body, 0, on_behalf_of=None, run_id=None, nonce=None)
+    db.create("t1", ("i", "s"), body, 0, actor=None, run_id=None, nonce=None)
     steps = (("QUEUED", "INITIALIZING"), ("INITIALIZING", "RUNNING"), ("RUNNING", "RUNNING"))
     for frm, to in steps:
         assert db.transition("t1", frm, to)
@@ -207,7 +276,7 @@ def test_startup_scrubs_tasks_that_ended_before(tmp_path):
                        {"path": "/d/b", "url": "https://h.test/b?sig=CANARY"},
                        {"path": "/d/c", "url": "https://u:CANARY@h.test/c"}]}  # fmt: skip
     for tid in ("old", "live"):
-        db.create(tid, ("i", "s"), body, 0, on_behalf_of=None, run_id=None, nonce=None)
+        db.create(tid, ("i", "s"), body, 0, actor=None, run_id=None, nonce=None)
     with sqlite3.connect(path) as c:  # reproduce how the earlier version ended (task_json as is)
         c.execute("UPDATE tasks SET state='COMPLETE', task_json=? WHERE id='old'",
                   (json.dumps(body),))  # fmt: skip
@@ -238,7 +307,7 @@ def test_pid_reuse_is_not_killed_or_waited(tmp_path):
         cfg = {"work_dir": str(tmp_path / "work"), "files_root": str(tmp_path / "files")}
         db = TesDb(tmp_path / "tes.sqlite")
         worker = TesWorker(cfg, db)
-        db.create("t1", ("i", "s"), {"executors": [sh("true")]}, 0, on_behalf_of=None,
+        db.create("t1", ("i", "s"), {"executors": [sh("true")]}, 0, actor=None,
                   run_id=None, nonce=None)  # fmt: skip
         db.transition("t1", "QUEUED", "CANCELING")
         log_dir = worker.log_dir("t1", 0)

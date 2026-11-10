@@ -222,13 +222,18 @@ class AccessTokenVerifier:
     """A yai AT (RFC 9068, typ=at+jwt). Requiring kid is a yai rule."""
 
     def __init__(
-        self, issuer: str, jwks_uri: str, audience: str, fetcher: KeyFetcher, skew: int = 60
-    ):
+        self, issuer: str, jwks_uri: str, audience: str, fetcher: KeyFetcher, skew: int = 60,
+        *, passport_scoped: bool = False,
+    ):  # fmt: skip
         self.issuer = issuer
         self.jwks_uri = jwks_uri
         self.audience = audience
         self.fetcher = fetcher
         self.skew = skew
+        # D-069: a service that exchanges the caller's token for their Passport (the TES for
+        # drs:// inputs) accepts a Passport-Scoped Access Token addressed to it. Everyone else
+        # refuses PSATs on the Bearer (D-008, G-AAI-01)
+        self.passport_scoped = passport_scoped
 
     def verify(self, token: str, now: int) -> dict[str, Any]:
         header, claims = unverified_parts(token)
@@ -245,13 +250,19 @@ class AccessTokenVerifier:
         auds = [aud] if isinstance(aud, str) else aud
         if not isinstance(auds, list) or self.audience not in auds:
             raise TokenError("wrong_audience")
-        if PSAT_SCOPE in scopes_of(claims):
+        if PSAT_SCOPE in scopes_of(claims) and not self.passport_scoped:
             raise TokenError("wrong_token_kind", "passport-scoped access token")  # G-AAI-01
         if not isinstance(claims.get("sub"), str) or not claims["sub"]:
             raise TokenError("malformed", "sub")
         client_id = claims.get("client_id")  # the "content" in aai.md section 3
         if not isinstance(client_id, str) or not client_id:
             raise TokenError("malformed", "client_id")
+        act = claims.get("act")  # RFC 8693 section 4.1: {"sub": <actor>, "act": {...}} (D-067)
+        if act is not None and (not isinstance(act, dict) or not isinstance(act.get("sub"), str)
+                                or not act["sub"]):  # fmt: skip
+            raise TokenError("malformed", "act")
+        if act is not None and client_id == claims["sub"]:
+            raise TokenError("malformed", "act on a service token")
         return claims
 
 

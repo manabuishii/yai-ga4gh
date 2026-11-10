@@ -127,10 +127,10 @@ rows:
   assume: 利用者の代わりにタスクを出す
   spec: TES は「利用者が出してよいか」を実装が決める(TES-AUTH-02)。代理の決まりは無い
   verdict: 注意
-  fix: サービスの AT(`tes.delegate`)+tags。利用者は読むだけ(7 節)
+  fix: 利用者の AT を RFC 8693 で TES あてに交換した AT(`sub`=利用者、`act.sub`=WES、D-067)。持ち主は利用者、代理は WES。利用者は読むだけ(7 節)
   stage: '2'
   test: INT-TES-DELEGATE, NEG-TAG-SPOOF
-  expect: WES が出したタスクの持ち主は WES、tags に本人。利用者が `yai.` の tags を付けると 400
+  expect: WES が出したタスクの持ち主は利用者(`sub`)、代理は WES(`act.sub`)、tags に `yai.on_behalf_of` は無い。`yai.on_behalf_of` は誰が付けても 400、`yai.run_id`・`yai.submit_nonce` は誰でも付けられる。利用者は自分の AT で読めるが取り消せない(403)、bob には 404
   where: [a09, a10]
   gaps: [G-AAI-08]
   tests: [INT-TES-DELEGATE, NEG-TAG-SPOOF]
@@ -139,7 +139,7 @@ rows:
   assume: WES の `tes_uri` を辿ればタスクが見える
   spec: '`tes_uri` は任意で、見るための資格情報は決まっていない'
   verdict: 注意
-  fix: '`yai.on_behalf_of` の本人は AT(`aud=yai-tes`)で読める'
+  fix: '持ち主(交換した AT の `sub`)本人は自分の AT(`aud=yai-tes`)で読める(D-067)'
   stage: '2'
   test: INT-TES-URI-READ
   expect: 本人の AT で `tes_uri` が 200、別人は 404
@@ -283,7 +283,7 @@ rows:
   assume: 前のステップの出力を次のステップの入力にできる
   spec: TES はタスクごとの所属を知らない。WES が出したタスクの持ち主はすべて WES のサービス
   verdict: 合わない
-  fix: TES の出力の記録に「持ち主・`yai.on_behalf_of`・`yai.run_id`・作ったタスク」を残す。WES のサービスが出すタスクの `file://` の入力は、**同じ `yai.on_behalf_of` かつ同じ `yai.run_id`** の出力だけ。利用者が直接出すタスクは同じ持ち主の出力だけ
+  fix: TES の出力の記録に「持ち主・代理(`act.sub`)・`yai.run_id`・作ったタスク」を残す。代理で出すタスクの `file://` の入力は、**同じ持ち主・同じ代理・同じ `yai.run_id`** の出力だけ。利用者が直接出すタスクは、自分が直接出したタスクの出力だけ(D-067)
   stage: '2'
   test: INT-FILE-SAME-RUN
   expect: 同じ run のステップの間は通る。別の利用者・別の run の出力を指すと 400

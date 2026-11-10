@@ -133,13 +133,13 @@ class OutputsTes(FakeTes):
         super().__init__(clock)
         self.sent: dict[str, dict[str, Any]] = {}
 
-    def create(self, task: dict[str, Any]) -> str:
-        task_id = super().create(task)
+    def create(self, task: dict[str, Any], token: str | None = None) -> str:
+        task_id = super().create(task, token)
         self.sent[task_id] = task
         return task_id
 
-    def get(self, task_id: str) -> dict[str, Any]:
-        out = super().get(task_id)
+    def get(self, task_id: str, token: str | None = None) -> dict[str, Any]:
+        out = super().get(task_id, token)
         task = self.sent[task_id]
         out["outputs"] = task["outputs"]
         out["executors"] = task["executors"]
@@ -248,7 +248,7 @@ def test_lost_passport_fails_only_the_step_that_needs_it(wrig):
     t.join(5)
     run = wrig.db.get_run("rp")
     assert run is not None and run.state == "SYSTEM_ERROR"
-    assert "credentials were lost" in json.dumps(run.system_logs)
+    assert "credentials held for this run are gone" in json.dumps(run.system_logs)
     assert list(wrig.tes.sent) == ["t1"]
 
 

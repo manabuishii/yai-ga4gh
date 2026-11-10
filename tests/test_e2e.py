@@ -125,6 +125,13 @@ class Creds:
         r.raise_for_status()
         return r.json()
 
+    def psat_for(self, user: str, aud: str) -> dict[str, str]:
+        """A passport-scoped AT for `aud`: the user lets that service fetch their Passport."""
+        r = httpx.post(self.aai + "/test/login",
+                       json={"username": user, "aud": [aud], "passport_aud": [aud]})  # fmt: skip
+        r.raise_for_status()
+        return {"Authorization": f"Bearer {r.json()['access_tokens'][aud]}"}
+
     def at(self, user: str, aud: str) -> dict[str, str]:
         return {"Authorization": "Bearer " + self.login(user, [aud])["access_tokens"][aud]}
 
@@ -139,6 +146,17 @@ class Creds:
         r = httpx.post(self.aai + "/token", data=data, auth=("yai-test-client", self.test_secret))
         r.raise_for_status()
         return r.json()["access_token"]
+
+    def delegated(self, user: str, aud: str = "yai-tes") -> dict[str, str]:
+        """What the WES holds for the user: the user's AT issued to the WES, exchanged for the TES
+        (sub=user, act.sub=yai-wes, D-067)."""
+        subject = self.at(user, "yai-wes")["Authorization"].split()[1]
+        at_type = "urn:ietf:params:oauth:token-type:access_token"
+        data = {"grant_type": EXCHANGE, "subject_token": subject, "audience": aud,
+                "subject_token_type": at_type, "requested_token_type": at_type}  # fmt: skip
+        r = httpx.post(self.aai + "/token", data=data, auth=("yai-wes", self.wes_secret))
+        r.raise_for_status()
+        return {"Authorization": "Bearer " + r.json()["access_token"]}
 
     def service(self, aud: str) -> dict[str, str]:
         r = httpx.post(self.aai + "/token", data={"grant_type": "client_credentials",
@@ -196,7 +214,7 @@ def local_stack(tmp: Path) -> SimpleNamespace:
     wes = Server("wes", wcfg, tmp / "wes", port=wport).start()
     return SimpleNamespace(
         kind="local", tmp=tmp, aai=aai, drs=drs, tes=tes, worker=worker, wes=wes,
-        drs_proxy=drs_proxy, tes_proxy=tes_proxy, fake=fake, ids=ids, tcfg=tcfg,
+        drs_proxy=drs_proxy, tes_proxy=tes_proxy, fake=fake, ids=ids, tcfg=tcfg, wcfg=wcfg,
         wes_url=wes.url, tes_url=tes.url, drs_url=drs.url, drs_host="drs.yai.test",
         creds=Creds(aai.root, TEST_CLIENT_SECRET, WES_CLIENT_SECRET),
         files_root=Path(tcfg["files_root"]).resolve(), output_root=None,
@@ -495,7 +513,7 @@ def test_E2E_09(stack):
     stack.wes.start()
     log = wait(stack, run_id)
     assert log["state"] == "SYSTEM_ERROR", log["run_log"]
-    assert any("credentials were lost" in s for s in log["run_log"]["system_logs"])
+    assert any("credentials held for this run are gone" in s for s in log["run_log"]["system_logs"])
     first, second = tasks(stack, run_id)
     assert first["exit_code"] == 0 and "tes_uri" in first  # step 1 continued and finished
     assert "tes_uri" not in second  # step 2 was not submitted
@@ -703,20 +721,31 @@ def test_INT_TIME_EMPTY(stack):
 
 
 def test_INT_TES_DELEGATE(stack):
-    """C-11: tasks WES submits are owned by WES, with the user in tags; the user can read but not
-    cancel."""
+    """C-11 (D-067): tasks WES submits are owned by the user, with the WES as the acting service
+    (act in the exchanged AT), and no yai.on_behalf_of tag. The user can read but not cancel;
+    the WES reads them with its own token too (it is the actor); another user sees nothing."""
     log = cat_run(stack, key="public")
-    (tes,) = tes_tasks_of_run(stack, log["run_id"])
-    assert tes["tags"]["yai.on_behalf_of"].endswith("|alice")
+    (tes,) = tes_tasks_of_run(stack, log["run_id"])  # read as the WES service identity
+    assert "yai.on_behalf_of" not in tes["tags"]
     assert tes["tags"]["yai.run_id"] == log["run_id"]
     alice = stack.creds.at("alice", "yai-tes")
     assert httpx.get(f"{stack.tes_url}/tasks/{tes['id']}", headers=alice).status_code == 200
     assert httpx.post(f"{stack.tes_url}/tasks/{tes['id']}:cancel", headers=alice).status_code == 403
-    if stack.kind == "local":  # owner read from the DB by the observer (D-023)
+    bob = stack.creds.at("bob", "yai-tes")
+    assert httpx.get(f"{stack.tes_url}/tasks/{tes['id']}", headers=bob).status_code == 404
+    if stack.kind == "local":  # owner and actor read from the DB by the observer (D-023)
         db = sqlite3.connect(Path(stack.tcfg["data_dir"]) / "tes.sqlite")
-        owner = db.execute("SELECT owner_sub FROM tasks WHERE id=?", (tes["id"],)).fetchone()
+        row = db.execute("SELECT owner_sub, actor FROM tasks WHERE id=?", (tes["id"],)).fetchone()
         db.close()
-        assert owner == ("yai-wes",)
+        assert row[0] == "alice" and row[1].endswith("|yai-wes")
+        # the token the WES sent to the TES: for alice, act = the WES, and no Passport scopes
+        # (the WES resolves drs:// itself here, so it asks for none, D-069)
+        creates = [s for s in stack.tes_proxy.seen
+                   if s.method == "POST" and s.path.endswith("/tasks")]  # fmt: skip
+        auth = {k.lower(): v for k, v in creates[-1].headers.items()}["authorization"]
+        claims = _claims(auth.split(" ", 1)[1])
+        assert claims["sub"] == "alice" and claims["act"]["sub"] == "yai-wes"
+        assert "ga4gh_passport_v1" not in claims["scope"].split()
 
 
 def test_INT_TES_URI_READ(stack):
@@ -866,6 +895,89 @@ def test_ERR_SHAPE(stack):
         assert set(body) == {"msg", "status_code"} and body["status_code"] == r.status_code
 
 
+def test_INT_TES_DRS_DIRECT(stack):
+    """D-069: a user submits a task with a drs:// input straight to the TES with a
+    passport-scoped AT. The TES exchanges it for the user's Passport at the broker, resolves the
+    input at the DRS and runs it; the saved task holds the URL without its signature and the
+    drs:// in the system log. A plain AT gets 403, a user without the Visa 403, the WES's own
+    token 403 (no user)."""
+    out = f"file://{stack.output_root or stack.files_root}/direct/{secrets.token_hex(4)}/out.txt"
+    task = {"executors": [{"image": "alpine:3.20", "command": ["cat", "/yai/work/in"],
+                           "workdir": "/yai/work", "stdout": "/yai/work/out.txt"}],
+            "inputs": [{"path": "/yai/work/in", "url": f"drs://{stack.drs_host}/{stack.ids['ds1']}"}],
+            "outputs": [{"path": "/yai/work/out.txt", "url": out}]}  # fmt: skip
+    alice = stack.creds.psat_for("alice", "yai-tes")
+    r = httpx.post(stack.tes_url + "/tasks", json=task, headers=alice)
+    assert r.status_code == 200, r.text
+    tid = r.json()["id"]
+    deadline = time.monotonic() + 60
+    t: dict = {}
+    while time.monotonic() < deadline:
+        resp = httpx.get(stack.tes_url + f"/tasks/{tid}", params={"view": "FULL"}, headers=alice)
+        t = resp.json()
+        if t["state"] in TERMINAL:
+            break
+        time.sleep(0.5)
+    assert t["state"] == "COMPLETE", t
+    assert read_output(stack, out) == "controlled data for E2E\n"
+    assert "sig=" not in t["inputs"][0]["url"] and "drs://" not in t["inputs"][0]["url"]
+    assert f"drs://{stack.drs_host}/" in json.dumps(t["logs"][0]["system_logs"])
+    plain = stack.creds.at("alice", "yai-tes")  # not passport-scoped: no Passport to fetch
+    assert httpx.post(stack.tes_url + "/tasks", json=task, headers=plain).status_code == 403
+    bob = stack.creds.psat_for("bob", "yai-tes")
+    assert httpx.post(stack.tes_url + "/tasks", json=task, headers=bob).status_code == 403
+    svc = stack.creds.service("yai-tes")
+    assert httpx.post(stack.tes_url + "/tasks", json=task, headers=svc).status_code == 403
+
+
+def test_INT_TES_DRS_VIA_WES(stack):
+    """D-069 end to end through a WES with resolver.resolve_in_wes: false (local only, a second
+    WES on the same TES): the WES asks for the Passport scopes in the exchange, passes drs://
+    unchanged without needing a Passport of its own, the TES resolves it for the user and the
+    run completes. The token the TES received is a PSAT for alice with act = the WES."""
+    if stack.kind != "local":
+        pytest.skip("local only: starts a second WES")
+    import copy
+
+    cfg = copy.deepcopy(stack.wcfg)
+    port = free_port()
+    cfg["data_dir"] = str(stack.tmp / "wes2-data")
+    cfg["public_base_url"] = f"http://127.0.0.1:{port}"
+    cfg["resolver"]["resolve_in_wes"] = False
+    wes2 = Server("wes", cfg, stack.tmp / "wes2", port=port).start()
+    try:
+        stack.tes_proxy.clear()
+        data = {"workflow_type": "CWL", "workflow_type_version": "v1.2", "workflow_url": "wf.cwl",
+                "workflow_params": json.dumps({"infile": drs_file(stack)})}  # fmt: skip
+        files = [("workflow_attachment", ("wf.cwl", CAT.encode()))]
+        headers = stack.creds.at("alice", "yai-wes")
+        r = httpx.post(wes2.url + "/runs", data=data, files=files, headers=headers, timeout=30)
+        assert r.status_code == 200, r.text
+        run_id = r.json()["run_id"]
+        deadline = time.monotonic() + 60
+        state = ""
+        while time.monotonic() < deadline:
+            state = httpx.get(f"{wes2.url}/runs/{run_id}/status", headers=headers).json()["state"]
+            if state in TERMINAL:
+                break
+            time.sleep(0.5)
+        log = httpx.get(f"{wes2.url}/runs/{run_id}", headers=headers).json()
+        assert state == "COMPLETE", log["run_log"]
+        creates = [s for s in stack.tes_proxy.seen
+                   if s.method == "POST" and s.path.endswith("/tasks")]  # fmt: skip
+        sent = creates[-1].json()
+        assert sent["inputs"][0]["url"].startswith("drs://")  # unchanged by the WES
+        auth = {k.lower(): v for k, v in creates[-1].headers.items()}["authorization"]
+        claims = _claims(auth.split(" ", 1)[1])
+        assert claims["sub"] == "alice" and claims["act"]["sub"] == "yai-wes"
+        assert {"openid", "ga4gh_passport_v1"} <= set(claims["scope"].split())
+        (tes,) = tes_tasks_of_run(stack, run_id)
+        assert tes["inputs"][0]["url"].startswith("http")  # resolved by the TES
+        assert read_output(stack, log["outputs"]["out"]["location"]).startswith("controlled")
+    finally:
+        wes2.stop()
+
+
 def test_INT_FILE_SAME_RUN(stack):
     """C-25: allowed between steps of the same run (E2E-02); pointing to another user's or
     another run's output gets 400."""
@@ -875,12 +987,13 @@ def test_INT_FILE_SAME_RUN(stack):
             "inputs": [{"path": "/in", "url": out_url}]}  # fmt: skip
     bob = stack.creds.at("bob", "yai-tes")
     assert httpx.post(stack.tes_url + "/tasks", json=task, headers=bob).status_code == 400
-    svc = stack.creds.service("yai-tes")
-    owner = tes_tasks_of_run(stack, log["run_id"])[0]["tags"]["yai.on_behalf_of"]
-    other_run = {**task, "tags": {"yai.run_id": "rother", "yai.on_behalf_of": owner}}
-    assert httpx.post(stack.tes_url + "/tasks", json=other_run, headers=svc).status_code == 400
-    same_run = {**task, "tags": {"yai.run_id": log["run_id"], "yai.on_behalf_of": owner}}
-    r = httpx.post(stack.tes_url + "/tasks", json=same_run, headers=svc)
+    alice = stack.creds.at("alice", "yai-tes")  # the owner herself, outside the run: 400 (C-25)
+    assert httpx.post(stack.tes_url + "/tasks", json=task, headers=alice).status_code == 400
+    via_wes = stack.creds.delegated("alice")  # what the WES holds for alice (D-067)
+    other_run = {**task, "tags": {"yai.run_id": "rother"}}
+    assert httpx.post(stack.tes_url + "/tasks", json=other_run, headers=via_wes).status_code == 400
+    same_run = {**task, "tags": {"yai.run_id": log["run_id"]}}
+    r = httpx.post(stack.tes_url + "/tasks", json=same_run, headers=via_wes)
     assert r.status_code == 200
 
 
@@ -1012,13 +1125,19 @@ def test_NEG_SECRET_IN_LOG_e2e(stack):
     alice = stack.creds.at("alice", "yai-wes")["Authorization"].split()[1]
     service = stack.creds.service("yai-tes")["Authorization"].split()[1]
     params = {"script": 'sleep 2; cp "$0" a.txt', "data": drs_file(stack)}
+    stack.tes_proxy.clear()
     run_id = submit(stack, two_steps("first/out"), params, passports=[passport])
     until(lambda: tasks(stack, run_id)[0].get("system_logs", [""])[0] == "state=RUNNING")
-    (running,) = tes_tasks_of_run(stack, run_id)
-    url = running["inputs"][0]["url"]
+    # the signed URL as WES sent it to TES (seen by the relay); once the inputs are fetched
+    # (RUNNING), TES no longer holds its query part (D-068)
+    (sent,) = [s for s in stack.tes_proxy.requests(method="POST", contains="/tasks")
+               if s.json().get("tags", {}).get("yai.run_id") == run_id]  # fmt: skip
+    url = sent.json()["inputs"][0]["url"]
     query = httpx.URL(url).query.decode()
-    assert "sig=" in query, url  # a signed URL exists while running (removed when finished)
+    assert "sig=" in query, url
     sig = httpx.QueryParams(query)["sig"]
+    (running,) = tes_tasks_of_run(stack, run_id)
+    assert running["inputs"][0]["url"] == url.split("?")[0]
     assert wait(stack, run_id)["state"] == "COMPLETE"
     logs = "".join(p.log() for p in (stack.aai, stack.drs, stack.tes, stack.worker, stack.wes))
     secrets = {"passport": passport, "passport payload": passport.split(".")[1],

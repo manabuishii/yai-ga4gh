@@ -56,6 +56,9 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     psat_ttl = int(ttl.get("psat", 900))
     passport_ttl = int(ttl.get("passport", 7200))
     visa_ttl = int(ttl.get("visa", 7200))
+    # AT a service gets when it exchanges a user's AT to call the next service (D-067). As long as
+    # the Passport by default: a multi-step run must not lose its credentials halfway
+    delegated_ttl = int(ttl.get("delegated_access_token", passport_ttl))
     users: dict[str, dict[str, Any]] = config.get("users", {})
     clients: dict[str, dict[str, Any]] = config.get("clients", {})
     # Test endpoints (D-054). /test/login and the untrusted-Visa JWKS are test_endpoints; replacing
@@ -63,6 +66,19 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     test_endpoints = bool(config.get("test_endpoints", False))
     test_visa_endpoint = bool(config.get("test_visa_endpoint", False))
     clock = Clock()
+    # D-070: tokens issued to a user before this time are refused at every exchange (test only;
+    # a real revocation endpoint is the identity provider's, G-AAI-09). Memory only
+    revoked_before: dict[str, int] = {}
+
+    def check_subject(claims: dict[str, Any]) -> str:
+        """The user of a subject token must still exist and the token must not be revoked
+        (checked at every exchange, D-070). Returns the user name."""
+        sub = claims.get("sub")
+        if not isinstance(sub, str) or sub not in users:
+            raise OAuthError(400, "invalid_grant", "subject_token is not for a known user")
+        if claims.get("iat", 0) < revoked_before.get(sub, 0):
+            raise OAuthError(400, "invalid_grant", "subject_token was revoked")
+        return sub
 
     @app.exception_handler(OAuthError)
     async def _oauth_error(_: Request, exc: OAuthError) -> JSONResponse:
@@ -72,19 +88,37 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     def ok(body: dict[str, Any]) -> JSONResponse:
         return JSONResponse(body, 200, headers=NO_STORE)
 
-    def access_token(sub: str, aud: str, scopes: list[str], client_id: str) -> str:
+    def access_token(
+        sub: str, aud: str, scopes: list[str], client_id: str, *,
+        act: dict[str, Any] | None = None, lifetime: int | None = None,
+    ) -> str:  # fmt: skip
         now = clock.now()
-        claims = {
+        claims: dict[str, Any] = {
             "iss": issuer,
             "sub": sub,
             "aud": aud,
             "iat": now,
-            "exp": now + at_ttl,
+            "exp": now + (at_ttl if lifetime is None else lifetime),
             "jti": ulid(),
             "client_id": client_id,
             "scope": " ".join(scopes),
         }
+        if act is not None:
+            claims["act"] = act  # RFC 8693 section 4.1: who acts for the subject (D-067)
         return broker_keys.sign(claims, "at+jwt")
+
+    def verify_own_at(token: str, now: int) -> dict[str, Any]:
+        """Claims of an AT this broker issued (signature, times, issuer). TokenError otherwise."""
+        header, _ = unverified_parts(token)
+        if header.get("typ") != "at+jwt":
+            raise TokenError("wrong_token_kind")
+        if header.get("kid") not in {str(k.kid) for k in broker_keys.keys}:
+            raise TokenError("bad_signature")
+        claims = jwt.decode(token, KeySet(list(broker_keys.keys)), algorithms=["ES256"]).claims
+        check_times(claims, now, 60)
+        if claims.get("iss") != issuer:
+            raise TokenError("untrusted_issuer")
+        return claims
 
     def visa(sub: str, spec: dict[str, Any]) -> str:
         now = clock.now()
@@ -192,12 +226,32 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             result: dict[str, Any] = {
                 "passport_scoped_access_token": broker_keys.sign(psat_claims, "at+jwt")
             }
+            revoked_before.pop(name, None)  # a new login is a new consent (D-070)
             scopes = list(user.get("scopes", []))
+            # ATs for the audiences in passport_aud also carry the PSAT scopes: the user lets
+            # that service fetch their Passport (D-069), as a consent screen would
+            with_passport = set(body.get("passport_aud", []))
             result["access_tokens"] = {
-                aud: access_token(name, aud, scopes, "yai-test-login")
+                aud: access_token(
+                    name, aud,
+                    scopes + PSAT_SCOPE.split() if aud in with_passport else scopes,
+                    "yai-test-login",
+                )
                 for aud in body.get("aud", [])
-            }
+            }  # fmt: skip
             return ok(result)
+
+        @app.post("/test/revoke")
+        async def test_revoke(raw: Any = test_body) -> JSONResponse:
+            """Test only. Revoke everything issued to a user so far: PSATs and ATs issued before
+            now are refused at the next exchange (Passport or delegated AT). Passports, exchanged
+            ATs and signed URLs already issued keep working until their exp (what D-070 records
+            as the window). A new /test/login lifts it."""
+            name = body_of(raw).get("username")
+            if not isinstance(name, str) or name not in users:
+                raise OAuthError(404, "not_found", "unknown user")
+            revoked_before[name] = clock.now() + 1  # iat has whole seconds: include this second
+            return ok({"username": name, "revoked_at": revoked_before[name]})
 
     if test_visa_endpoint:
 
@@ -225,8 +279,10 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             raise OAuthError(400, "invalid_request", exc.msg) from None
         grant = form.get("grant_type")
         if grant == TOKEN_EXCHANGE:
-            client_auth(request, form)
-            return ok(exchange(form))
+            cid = client_auth(request, form)
+            if form.get("requested_token_type") == ACCESS_TOKEN_TYPE:
+                return ok(exchange_access_token(cid, form))
+            return ok(exchange(cid, form))
         if grant == "client_credentials":
             cid = client_auth(request, form)
             client = clients[cid]
@@ -234,7 +290,9 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             aud = form.get("audience") or (auds[0] if auds else None)
             if not isinstance(aud, str) or aud not in auds:
                 raise OAuthError(400, "invalid_target", "audience not allowed for client")
-            scopes = list(client.get("scopes", []))
+            # the PSAT scopes are for tokens exchanged for a user (D-069); a service's own token
+            # names no user and never carries them
+            scopes = [s for s in client.get("scopes", []) if s not in PSAT_SCOPE.split()]
             asked = form.get("scope")
             if asked:
                 scopes = [s for s in str(asked).split() if s in scopes]
@@ -242,8 +300,81 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             return ok({"access_token": at, "token_type": "Bearer", "expires_in": at_ttl})
         raise OAuthError(400, "unsupported_grant_type", "grant_type not supported")
 
-    def exchange(form: dict[str, Any]) -> dict[str, Any]:
-        """AAI-ISS-01: PSAT -> Passport (Passport Issuer rules of AAI 1.2)."""
+    def exchange_access_token(cid: str, form: dict[str, Any]) -> dict[str, Any]:
+        """RFC 8693: a user's AT (audience = this client's service) -> an AT for the next service,
+        with `act` naming this client (D-067, a yai extension on top of AAI 1.2).
+
+        Conditions: the subject token is a user AT this broker issued and still valid; its `aud`
+        contains the service name the client acts as (`clients.<id>.service`, default the
+        client id), so a client can only act for users who actually called it; `audience` is
+        one the client may hold. The scopes are the client's (`clients.<id>.scopes`, narrowed by
+        `scope`): the user authorized the service by calling it. When they include
+        `openid ga4gh_passport_v1`, the token is a Passport-Scoped Access Token the next service
+        can exchange for the user's Passport (D-069)."""
+        client = clients[cid]
+        if form.get("subject_token_type") != ACCESS_TOKEN_TYPE:
+            raise OAuthError(400, "invalid_request", "subject_token_type must be access_token")
+        auds = list(client.get("audiences", []))
+        aud = form.get("audience")
+        if not isinstance(aud, str) or aud not in auds:
+            raise OAuthError(400, "invalid_target", "audience not allowed for client")
+        try:
+            claims = verify_own_at(str(form.get("subject_token", "")), clock.now())
+        except Exception as exc:
+            raise OAuthError(
+                400, "invalid_grant", "subject_token is not a valid access token"
+            ) from exc
+        sub = delegable_subject(cid, form, claims)
+        act: dict[str, Any] = {"sub": str(client.get("sub", cid))}
+        if isinstance(claims.get("act"), dict):
+            act["act"] = claims["act"]  # a chain of actors nests (RFC 8693 section 4.1)
+        scopes = list(client.get("scopes", []))
+        asked = form.get("scope")
+        if asked:
+            scopes = [s for s in str(asked).split() if s in scopes]
+        at = access_token(sub, aud, scopes, cid, act=act, lifetime=delegated_ttl)
+        return {
+            "access_token": at,
+            "issued_token_type": ACCESS_TOKEN_TYPE,
+            "token_type": "Bearer",
+            "expires_in": delegated_ttl,
+            "scope": " ".join(scopes),
+        }
+
+    def delegable_subject(cid: str, form: dict[str, Any], claims: dict[str, Any]) -> str:
+        """The user a client may act for, from the claims of an AT this broker issued (D-067,
+        D-069): a user's token (not a service's own token) whose `aud` contains the service name
+        the client acts as (`clients.<id>.service`, default the client id), so a client can only
+        act for users who actually called it. A passport-scoped token is accepted as the subject
+        too (the next service in a chain exchanges what it received); the audience binding is
+        the gate, and the scopes of the result are the client's. The user must still exist and
+        the token must not be revoked (D-070); that is checked after the audience, so a token
+        for another service reveals nothing. Returns the user name."""
+        client = clients[cid]
+        if "actor_token" in form:
+            raise OAuthError(
+                400, "invalid_request", "actor_token is not used: the actor is the client"
+            )
+        sub, subject_aud = claims.get("sub"), claims.get("aud")
+        subject_auds = [subject_aud] if isinstance(subject_aud, str) else subject_aud
+        if not isinstance(sub, str) or not sub or not isinstance(subject_auds, list):
+            raise OAuthError(400, "invalid_grant", "subject_token is not a valid access token")
+        if claims.get("client_id") == sub:
+            raise OAuthError(400, "invalid_grant", "subject_token is a service token")
+        service = str(client.get("service", cid))
+        if service not in subject_auds:
+            raise OAuthError(400, "invalid_grant", "subject_token was not issued to this client")
+        return check_subject(claims)
+
+    def exchange(cid: str, form: dict[str, Any]) -> dict[str, Any]:
+        """AAI-ISS-01: PSAT -> Passport (Passport Issuer rules of AAI 1.2, "Conformance For
+        Passport Issuers" 3: client authentication, requested_token_type passport, the subject
+        a valid Passport-Scoped Access Token). Which client may exchange which PSAT is left to
+        the broker; this broker's policy (D-069): only a client the PSAT's `aud` names (the
+        relying party's client id, as the PSAT format requires when aud is present). Every PSAT
+        this broker issues has an `aud`, so one without is refused. A PSAT a service holds for a
+        user (one exchanged with `act`) is exchanged the same way, by that service only; Passport
+        1.2 has no field for who fetched it."""
         if form.get("requested_token_type") != PASSPORT_TOKEN_TYPE:
             raise OAuthError(400, "invalid_request", "requested_token_type must be passport")
         if form.get("subject_token_type") != ACCESS_TOKEN_TYPE:
@@ -257,13 +388,17 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             ks = KeySet(list(broker_keys.keys))
             claims = jwt.decode(subject, ks, algorithms=["ES256"]).claims
             check_times(claims, now, 60)
-            if claims.get("iss") != issuer or not {"openid", "ga4gh_passport_v1"} <= scopes_of(
-                claims
-            ):
+            if claims.get("iss") != issuer or not set(PSAT_SCOPE.split()) <= scopes_of(claims):
                 raise TokenError("wrong_token_kind")
         except Exception as exc:
             raise OAuthError(400, "invalid_grant", "subject_token is not a valid PSAT") from exc
-        sub = claims["sub"]
+        psat_aud = claims.get("aud")
+        psat_auds = [psat_aud] if isinstance(psat_aud, str) else psat_aud
+        if not isinstance(psat_auds, list) or not psat_auds:
+            raise OAuthError(400, "invalid_grant", "subject_token has no aud")
+        if str(clients[cid].get("service", cid)) not in psat_auds:
+            raise OAuthError(400, "invalid_grant", "subject_token was not issued to this client")
+        sub = check_subject(claims)
         user = users.get(sub, {})
         visas = [visa(sub, spec) for spec in user.get("visas", [])]
         audience = form.get("audience")

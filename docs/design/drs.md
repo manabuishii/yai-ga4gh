@@ -19,7 +19,7 @@
 | 操作 | 道 | 最小版の中身 | 義務(ID) |
 | --- | --- | --- | --- |
 | GetServiceInfo | `GET /service-info` | `type={group: org.ga4gh, artifact: drs, version: 1.5.0}`。`maxBulkRequestLength` を根と `drs` の下に(既定 100)、`drs.objectCount`・`totalObjectSize` | DRS-SI-01〜03、G-DRS-06・14 |
-| OptionsObject | `OPTIONS /objects/{id}` | `Authorizations`(**`metadata_policy` から作る**。`/access` の方式は `AccessMethod.authorizations` で、`access_policy` から作る)。`public` は `supported_types=[None]`、`bearer` は `[BearerAuth]`+`bearer_auth_issuers`、`dataset` は `[PassportAuth]`+`passport_auth_issuers`(Visa Issuer の `iss`)。無い ID は 404 | DRS-AUTH-02・04・05、G-DRS-08・13 |
+| OptionsObject | `OPTIONS /objects/{id}` | `Authorizations`(**`metadata_policy` から作る**。`/access` の方式は `AccessMethod.authorizations` で、`access_policy` から作る)。`public` は `supported_types=[None]`、`bearer` は `[BearerAuth]`+`bearer_auth_issuers`、`dataset` は `[PassportAuth]`+`passport_auth_issuers`(Visa Issuer の `iss`)+**`yai_required_visas`**(要る Visa の type と value=dataset。yai の拡張、設定 `authorizations.expose_dataset` で切れる、D-072)。無い ID は 404 | DRS-AUTH-02・04・05、G-DRS-08・13・17 |
 | GetObject | `GET /objects/{id}` | メタデータの方針で判定。`dataset` の方針で Passport が無ければ 401 | DRS-OBJ-01〜06、DRS-ID-01・02 |
 | PostObject | `POST /objects/{id}` | 本文 `{passports: [...], expand?}`。`tokens` が来たら 400 | DRS-AUTH-03、G-DRS-03・04・11 |
 | GetAccessURL | `GET /objects/{id}/access/{access_id}` | `public`・`bearer` の方針だけ。`dataset` は 401(Passport は POST で、と `msg` に) | DRS-ACC-01・02 |
@@ -33,7 +33,7 @@
 | --- | --- | --- | --- |
 | `public` | 署名なしの配信口の URL(ヘッダーなし) | なし | なし |
 | `bearer` | なし | `a1` | `[BearerAuth]` |
-| `dataset` | なし | `a1` | `[PassportAuth]`+`passport_auth_issuers` |
+| `dataset` | なし | `a1` | `[PassportAuth]`+`passport_auth_issuers`+`yai_required_visas`(D-072) |
 
 - **メタデータの方針と `/access` の方針を別に持つ**(既定は同じ)。「メタデータは公開・`/access` は dataset」を試験に入れる(計画 第 2 版の段階 2)
 - 署名付き URL: `HMAC-SHA256(秘密, object_id | access_id | exp)`、`exp` は既定で発行から 3600 秒。**ヘッダーは付けない**(TES に渡せるように、C-03)。期限切れ・別のオブジェクトの署名・改ざんは 403

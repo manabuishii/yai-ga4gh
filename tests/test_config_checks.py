@@ -158,6 +158,79 @@ REFUSE = [
         {**WES_OK, "resolver": {"compact": {"p": "https://evil.example/objects/{id}"}}},
         "resolver.compact.p: host not allowed",
     ),
+    ("aai", {"clients": {"c": {"secret": SECRET, "sub": "svc"}}}, "clients.c.sub must equal"),
+    ("drs", {"auth": {**ANON, "accept_passport_scoped": True}}, "not a configuration key"),
+    # the TES resolving drs:// itself (D-069) needs a client secret and safe targets
+    (
+        "tes",
+        {"auth": ANON, "drs": {"enabled": True}},
+        "drs.client_secret_file is required",
+    ),
+    (
+        "tes",
+        {
+            "auth": ANON,
+            "drs": {
+                "enabled": True,
+                "client_secret_file": "s",
+                "token_url": "http://aai.yai.test/token",
+            },
+        },
+        "drs.token_url: plain http",
+    ),
+    (
+        "tes",
+        {
+            "auth": ANON,
+            "drs": {
+                "enabled": True,
+                "client_secret_file": "s",
+                "token_url": "https://aai.yai.test/token",
+                "compact": {"p": "https://evil.example/objects/{id}"},
+            },
+        },
+        "drs.compact.p: host not allowed",
+    ),
+    (
+        "tes",
+        {
+            "auth": {**ANON, "audience": "yai-tes"},
+            "drs": {
+                "enabled": True,
+                "client_id": "other",
+                "client_secret_file": "s",
+                "token_url": "https://aai.yai.test/token",
+            },
+        },
+        "drs.service_name .default drs.client_id. must equal auth.audience",
+    ),
+    (
+        "tes",
+        {
+            "auth": {**ANON, "audience": "yai-tes"},
+            "drs": {
+                "enabled": True,
+                "client_id": "tes-client",
+                "service_name": "other",
+                "client_secret_file": "s",
+                "token_url": "https://aai.yai.test/token",
+            },
+        },
+        "drs.service_name .default drs.client_id. must equal auth.audience",
+    ),
+    # an empty tes.scopes would ask for every scope of the broker's client (D-069)
+    ("wes", {**WES_OK, "tes": {"scopes": []}}, "tes.scopes must name at least one TES scope"),
+    # the Passport scopes never come from tes.scopes, however they are written (D-069)
+    (
+        "wes",
+        {**WES_OK, "tes": {"scopes": ["openid", "ga4gh_passport_v1"]}},
+        "tes.scopes must name at least one TES scope",
+    ),
+    (
+        "wes",
+        {**WES_OK, "tes": {"scopes": ["openid ga4gh_passport_v1"]}},
+        "tes.scopes must name at least one TES scope",
+    ),
     # http for tes.url and tes.token_url is loopback only
     (
         "wes",
@@ -220,6 +293,17 @@ def test_NEG_CONFIG_WARN_quiet_for_loopback_and_test_names(caplog):
     assert lines == [
         "yai-drs: auth.mode is anonymous: every request is allowed without credentials"
     ]
+
+
+def test_wes_tes_scopes_drop_passport_scopes_however_written():
+    """D-069: the scopes the WES asks for never include the Passport scopes from configuration,
+    whether listed separately or packed into one space-separated entry."""
+    from yai.common.startup import wes_tes_scopes
+
+    assert wes_tes_scopes({}) == ["tes.submit", "tes.read", "tes.cancel"]
+    assert wes_tes_scopes({"scopes": ["tes.read openid", "ga4gh_passport_v1", "tes.cancel"]}) == [
+        "tes.read", "tes.cancel"]  # fmt: skip
+    assert wes_tes_scopes({"scopes": ["openid ga4gh_passport_v1"]}) == []
 
 
 def test_NEG_CONFIG_RANGE_EDGES():

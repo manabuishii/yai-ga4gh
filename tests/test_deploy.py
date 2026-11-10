@@ -112,6 +112,9 @@ def test_setup_makes_certs_secrets_and_configs(local):
     configs = {s: yaml.safe_load((local / "config" / f"{s}.yaml").read_text()) for s in
                ("aai", "drs", "tes", "wes")}  # fmt: skip
     assert configs["aai"]["clients"]["yai-wes"]["secret"] == secret
+    tes_secret = (local / "secrets" / "tes-client-secret").read_text().strip()
+    assert configs["aai"]["clients"]["yai-tes"]["secret"] == tes_secret  # D-069
+    assert configs["tes"]["drs"]["client_secret_file"].endswith("/tes-client-secret")
     assert configs["tes"]["runner"] == {"kind": "docker", "docker": {"user": "0:0"}}
     assert configs["drs"]["public_base_url"] == "https://drs.yai.test"  # 443(D-017)
     texts = "".join((local / "config" / f"{s}.yaml").read_text() for s in configs)

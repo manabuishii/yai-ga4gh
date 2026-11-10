@@ -35,15 +35,19 @@ def bearer_token(request: Request) -> str | None:
 class JwtAuthenticator:
     """R1: yai AT from Authorization: Bearer. Empty list if absent (R3 decides if it is needed)."""
 
-    def __init__(self, auth: dict[str, Any], clock: Clock):
+    def __init__(self, auth: dict[str, Any], clock: Clock, *, passport_scoped: bool = False):
+        """passport_scoped: accept a Passport-Scoped Access Token addressed to this service. Only
+        the TES that exchanges it for the caller's Passport passes True (D-069); it is not a
+        configuration key, so no other service can be made to accept PSATs on its Bearer."""
         fetcher = KeyFetcher(
             cache_seconds=int(auth.get("key_cache_seconds", 3600)),
             refetch_min_interval=int(auth.get("key_refetch_min_interval_seconds", 60)),
             insecure_http_hosts=auth.get("insecure_http_hosts", []),
         )
         self.verifier = AccessTokenVerifier(
-            auth["issuer"], auth["jwks_uri"], auth["audience"], fetcher
-        )
+            auth["issuer"], auth["jwks_uri"], auth["audience"], fetcher,
+            passport_scoped=passport_scoped,
+        )  # fmt: skip
         self.clock = clock
 
     def verify_token(self, token: str) -> VerifiedCredential:
@@ -54,6 +58,7 @@ class JwtAuthenticator:
             raise ApiError(401, "invalid access token") from exc
         service = claims.get("client_id") == claims["sub"]
         scope = claims.get("scope", "")
+        act = claims.get("act")
         return VerifiedCredential(
             kind=CredentialKind.AT_SERVICE if service else CredentialKind.AT_USER,
             iss=claims["iss"],
@@ -61,6 +66,7 @@ class JwtAuthenticator:
             scopes=frozenset(scope.split()) if isinstance(scope, str) else frozenset(),
             exp=claims["exp"],
             client_id=claims.get("client_id"),
+            actor=act["sub"] if isinstance(act, dict) else None,  # shape checked by the verifier
         )
 
     def authenticate(self, request: Request) -> list[VerifiedCredential]:
@@ -75,5 +81,5 @@ class AtPrincipalResolver:
         for c in credentials:
             if c.kind in (CredentialKind.AT_USER, CredentialKind.AT_SERVICE):
                 kind = "service" if c.kind == CredentialKind.AT_SERVICE else "user"
-                return Principal(c.iss, c.sub, kind, c.scopes, credentials=(c,))
+                return Principal(c.iss, c.sub, kind, c.scopes, credentials=(c,), actor=c.actor)
         return None

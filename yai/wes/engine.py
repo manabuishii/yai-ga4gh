@@ -4,7 +4,10 @@ One step = one TES task. A CommandLineTool is one step; a serial Workflow runs o
 Flow: QUEUED -> INITIALIZING -> (per step: resolve drs:// inputs -> save intent before submitting
 to TES -> watch in RUNNING -> record outputs) -> COMPLETE when all steps are COMPLETE; stop at
 the first failure.
-Passports live only in memory (run_id -> list of Passports) and are dropped when the run ends.
+Passports and the exchanged TES tokens live only in memory (run_id -> Passports, run_id -> AT with
+`act` = this WES, D-067) and are dropped when the run ends. After a restart the engine keeps
+watching and cancelling with the WES's own token (TES shows a service the tasks it submitted);
+a step not yet submitted fails, as with a lost Passport.
 """
 
 from __future__ import annotations
@@ -19,10 +22,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from yai.common.fetch import redact
+from yai.common.resolver import DrsResolver, ResolveError
 from yai.common.timeutil import Clock, parse_rfc3339
 from yai.wes import cwl
 from yai.wes.db import TERMINAL, RunRow, StepRow, WesDb
-from yai.wes.resolver import DrsResolver, ResolveError
 from yai.wes.tes_client import TesClient, TesError
 
 log = logging.getLogger("yai.wes.engine")
@@ -41,7 +44,12 @@ TES_TO_RUN = {
 
 
 class LostCredentials(Exception):
-    """The step has drs:// inputs but no stored Passport (lost on restart)."""
+    """The step needs a credential held only in memory (the Passport for drs:// inputs, the
+    exchanged TES token of a delegated run) and it is gone: lost on restart, or dropped after the
+    TES rejected it as expired."""
+
+
+LOST = "the credentials held for this run are gone (restart, or the exchanged token expired)"
 
 
 class Unreachable(Exception):
@@ -62,6 +70,9 @@ class EngineConfig:
     unreachable_limit_seconds: float = 1800.0
     output_root: str = "/var/tes/files"  # root of TES output storage (same as the TES files_root)
     faults: dict[str, str] = field(default_factory=dict)
+    # False: drs:// inputs go to the TES unchanged and the TES resolves them with a Passport it
+    # gets for the user from the exchanged AT (D-069). Only for a TES that accepts drs://
+    resolve_drs: bool = True
 
 
 class Engine:
@@ -73,15 +84,21 @@ class Engine:
         self.workdir_of = workdir_of  # run_id -> location of the saved workflow document
         self.attachment_of = attachment_of  # (run_id, attachment name) -> content string
         self.passports: dict[str, list[str]] = {}
+        self.tokens: dict[str, str] = {}  # run_id -> AT for TES exchanged from the user's (D-067)
         self.threads: dict[str, threading.Thread] = {}
         self.lock = threading.Lock()
         self.stopping = threading.Event()
 
     # --- start ---
-    def start(self, run_id: str, passports: list[str] | None = None) -> None:
-        """RunWorkflow always passes passports (even empty). None means restart or cancel."""
+    def start(
+        self, run_id: str, passports: list[str] | None = None, token: str | None = None
+    ) -> None:
+        """RunWorkflow always passes passports (even empty) and the exchanged TES token when the
+        run is delegated. None means restart or cancel."""
         if passports is not None:
             self.passports[run_id] = list(passports)
+        if token is not None:
+            self.tokens[run_id] = token
         with self.lock:
             if self.stopping.is_set():
                 return  # no new watches after stop; the run continues in the next startup's recover
@@ -130,6 +147,7 @@ class Engine:
             run = self.db.get_run(run_id)
             if run is None or run.state in TERMINAL:
                 self.passports.pop(run_id, None)  # drop when the run ends (C-18)
+                self.tokens.pop(run_id, None)
             with self.lock:  # drop finished watches, not a replacing one (#32)
                 if self.threads.get(run_id) is threading.current_thread():
                     del self.threads[run_id]
@@ -180,7 +198,7 @@ class Engine:
         try:
             task = self.build_task(run, n)
         except LostCredentials:
-            self.fail(run_id, "SYSTEM_ERROR", "credentials were lost on restart", stop=False)
+            self.fail(run_id, "SYSTEM_ERROR", LOST, stop=False)
             return False
         except (ResolveError, cwl.CWLError) as exc:
             self.fail(run_id, "SYSTEM_ERROR", f"input resolution failed: {exc}", stop=False)
@@ -204,16 +222,20 @@ class Engine:
         done = {s.n: s.outputs for s in self.db.steps(run.id) if s.outputs is not None}
         params = cwl.step_params(plan, n, req.get("workflow_params") or {}, done)
         argv, files = cwl.bind(tool, params)
-        needs = any(loc.startswith("drs://") for loc, _ in files.values())
+        needs = self.cfg.resolve_drs and any(loc.startswith("drs://") for loc, _ in files.values())
         if needs and run.needs_passport and run.id not in self.passports:
             raise LostCredentials  # Passports are memory only; lost on restart (wes.md section 4)
+        if run.delegated and run.id not in self.tokens:
+            raise LostCredentials  # the exchanged TES token too (D-067): no silent owner change
         inputs = []
         for name, (loc, path) in sorted(files.items()):
             if loc.startswith("attachment:"):
                 content = self.attachment_of(run.id, loc.removeprefix("attachment:"))
                 inputs.append({"name": name, "path": path, "content": content})
                 continue
-            if loc.startswith("drs://"):
+            if loc.startswith("drs://") and not self.cfg.resolve_drs:
+                url = loc  # the TES resolves it for the user named in the exchanged AT (D-069)
+            elif loc.startswith("drs://"):
                 url = self.resolver.resolve(loc, self.passports.get(run.id))
                 self.db.add_log(run.id, f"input {name}: {redact(loc)} resolved to {redact(url)}")
             elif loc.startswith(("https://", "http://", "file://")):
@@ -239,11 +261,35 @@ class Engine:
             "executors": [executor],
             "inputs": inputs,
             "outputs": outputs,
-            "tags": {
-                "yai.run_id": run.id,
-                "yai.on_behalf_of": f"{run.owner[0]}|{run.owner[1]}",
-            },
+            "tags": {"yai.run_id": run.id},  # who the task is for is the AT's sub (D-067)
         }
+
+    def _tes_token(self, run_id: str) -> str | None:
+        return self.tokens.get(run_id)
+
+    def _tes_read(self, run_id: str, call, *args: Any) -> Any:
+        """GetTask, ListTasks and CancelTask with the run's exchanged token; if TES rejects it
+        (expired), continue with the WES's own token, which still sees the tasks it submitted."""
+        token = self._tes_token(run_id)
+        try:
+            return call(*args, token=token)
+        except TesError as exc:
+            if token is None or exc.status != 401:
+                raise
+            log.warning("exchanged token of %s rejected by TES; using the service token", run_id)
+            self.tokens.pop(run_id, None)
+            self.db.add_log(run_id, "the exchanged token was rejected by TES (expired?); reading "
+                            "and cancelling continue with the service token")  # fmt: skip
+            return call(*args, token=None)
+
+    def _create_token(self, run_id: str) -> str | None:
+        """The token for CreateTask. A delegated run submits only with its exchanged token: if
+        that is gone (restart, or dropped after a 401 during the nonce search), LostCredentials
+        rather than a task owned by the service (D-067)."""
+        run = self.db.get_run(run_id)
+        if run is not None and run.delegated and run_id not in self.tokens:
+            raise LostCredentials
+        return self._tes_token(run_id)
 
     def submit(
         self, run_id: str, task: dict[str, Any], nonce: str | None = None, *, n: int = 1
@@ -259,12 +305,19 @@ class Engine:
                 self.cancel_all(run_id)  # look up by nonce, then cancel
                 return None
             try:
-                task_id = self.tes.create(task)
+                token = self._create_token(run_id)
+            except LostCredentials:
+                self.fail(run_id, "SYSTEM_ERROR", LOST, stop=False)
+                return None
+            try:
+                task_id = self.tes.create(task, token=token)
                 self.fault("after_create_task")
                 break
             except TesError as exc:
                 if not exc.ambiguous:
                     msg = f"task submission failed: {exc.reason}"
+                    if exc.status == 401 and self._tes_token(run_id) is not None:
+                        msg += " (the exchanged token was rejected; expired?)"
                     self.fail(run_id, "SYSTEM_ERROR", msg, stop=False)
                     return None
                 try:
@@ -289,7 +342,7 @@ class Engine:
         deadline: float | None = None
         while True:
             try:
-                found = self.tes.find_by_nonce(nonce)
+                found = self._tes_read(run_id, self.tes.find_by_nonce, nonce)
             except TesError as exc:
                 log.warning("search for %s failed: %s", run_id, exc.reason)
                 if bounded and self._overdue(run_id, n):
@@ -331,7 +384,7 @@ class Engine:
                 self.cancel_all(run_id)
                 return False
             try:
-                task = self.tes.get(task_id)
+                task = self._tes_read(run_id, self.tes.get, task_id)
             except TesError:
                 if self._overdue(run_id, n):
                     self.fail(run_id, "SYSTEM_ERROR", "TES unreachable")  # keeps sending CancelTask
@@ -445,9 +498,9 @@ class Engine:
                 task_id = None  # steps read as finished need no stop
             while task_id is not None:
                 try:
-                    self.tes.cancel(task_id)
+                    self._tes_read(run_id, self.tes.cancel, task_id)
                     self.db.update_step(run_id, step.n, cancel_sent_at=self.clock.now())
-                    task = self.tes.get(task_id)
+                    task = self._tes_read(run_id, self.tes.get, task_id)
                     self.record_step(run_id, task, step.n)
                     if task.get("state") in TES_TERMINAL:
                         break
@@ -486,6 +539,7 @@ class Engine:
             if again and again.state == "CANCELING" and to != "CANCELED":
                 self.cancel_all(run_id)
         self.passports.pop(run_id, None)
+        self.tokens.pop(run_id, None)
 
     def fault(self, point: str) -> None:
         if self.cfg.faults.get(point) == "exit":

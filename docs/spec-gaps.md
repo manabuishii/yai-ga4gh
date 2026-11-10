@@ -29,6 +29,7 @@
 | G-DRS-14 | 漏れ | service-info の例は `"version": "1.5"`。`type.version` に何を書くか(`1.5`・`1.5.0`)が決まっていない | `drs/openapi/paths/service-info.yaml:26` の例 | `1.5.0`(タグの版)。相互運用の相手が `1.5` を期待するかは作って確かめる | 作る | drs |
 | G-DRS-15 | 漏れ | **壊れた資格情報と無い ID が重なったとき、401 と 404 のどちらを返すか**(確かめる順)が決まっていない。GetObject・PostObject・GetAccessURL・PostAccessURL の応答の一覧には 401・403・404 が並ぶだけで、説明は「The request is unauthorized.」「The requested `DrsObject` wasn't found.」だけ。認可の方針は実装が決めて執行する、とあるだけ(コードのレビューで見つけた、2026-10-16) | `drs/openapi/paths/objects@{object_id}.yaml:42・46`(GetObject の 401・404)、`:70・74`(PostObject)、`drs/openapi/paths/objects@{object_id}@access@{access_id}.yaml:16・20・49・53`、`drs/openapi/components/responses/401Unauthorized.yaml:1`、`404NotFoundDrsObject.yaml:1`、`drs/openapi/tags/Auth.md:3` | **資格情報の検査(壊れていれば 401)→ 有るか(404)→ 方針(401・403)**(案 A、D-025)。壊れた資格情報を黙って無視しない(`permissions.yaml` の public の note)と合う。どちらの順でも、資格情報なしで ID の有無が分かるのは同じ(資格情報なしの無い ID は 404)。GA4GH への質問の下書き: `docs/questions/2026-10-16_drs-401-vs-404.md`(投稿していない) | 原文 | drs、ch |
 | G-DRS-16 | 漏れ | `AccessMethod.type`(https など)と `AccessURL.url` のスキームが一致することを求める文が無い。ga4gh/passport-playground-drs(5eb7745)は `type: https` で `http://…` の URL を返す(INTEROP-DRS-1、2026-10-17) | `drs/openapi/components/schemas/AccessMethod.yaml`・`AccessURL.yaml` | yai-drs は type と URL のスキームを揃える(https)。yai-tes は取る URL のスキームを自分で見て https 以外は断る(試験の設定 `insecure_http_hosts` だけ http)。`type` は信用しない | 原文 | a56 |
+| G-DRS-17 | 漏れ | `Authorizations` は「どの種類の資格情報か」(`supported_types`)と「どの発行者か」(`passport_auth_issuers`)までで、**どの Visa(type と value)が要るか**を出す欄が無い。振り分け役(TES のゲートウェイ)は、Passport を DRS に送って断られるまで「この入力はどの dataset か」を知れない。利用者が複数の dataset の Visa を持つとき、拠点ごとの許可で先を絞れない(TES のゲートウェイで Passport を扱った実測、2026-11-09) | `drs/openapi/components/schemas/Authorizations.yaml` | yai-drs は方針が `dataset` のとき `yai_required_visas: [{type: ControlledAccessGrants, value: <dataset>}]` を足す(D-072、yai の拡張、設定で切れる)。OPTIONS は認証なしなので dataset の ID は誰にでも見える(G-DRS-13 と同じ受け入れ) | 原文 | drs |
 
 ## 2. TES 1.1
 
@@ -38,7 +39,7 @@
 | G-TES-02 | 漏れ | 終わったタスク(COMPLETE など)への CancelTask の結果が決まっていない。CANCELING と CANCELED の境目(「片付け」が何か)も実装しだい | `tes/…` CancelTask、`tesState` の説明 | 終わったものへの取り消しは 200 で何もしない(D-020)。CANCELING → CANCELED は「コンテナを止めて消し、作業ディレクトリを消した」とき | 原文 | tes、a13 |
 | G-TES-03 | 漏れ | `page_size` が 2048 以上・0・負のときの扱いが無い | `tes/…:161` | 400(仮)。他の実装は切り詰めるかもしれない → 相互運用の試験で比べる | 作る | tes |
 | G-TES-04 | 漏れ | 読み取り専用の項目(`id`・`state`・`logs`・`creation_time`)を CreateTask に入れて送ったときの扱い(無視か 400 か) | `tes/…` `readOnly` | 無視して、サーバーが付けたもので上書き(OpenAPI の readOnly の意味どおり) | 原文 | tes、a10 |
-| G-TES-05 | 漏れ | 入力・出力の取得に使う資格情報を渡す欄が無い(`tesInput` は `url` だけ、ヘッダーも無い) | `tes/…` `tesInput` | 署名付き URL で渡す(D-007、`system.md` 3 節)。TES 自身が DRS を解決するのは「あとで深める」の独自拡張 | 原文 | a10、a11 |
+| G-TES-05 | 漏れ | 入力・出力の取得に使う資格情報を渡す欄が無い(`tesInput` は `url` だけ、ヘッダーも無い) | `tes/…` `tesInput` | 署名付き URL で渡す(D-007、`system.md` 3 節)。yai-tes は設定 `drs.enabled` で `drs://` を自分でも解く(D-069、yai の拡張): 呼び手の Bearer が利用者の Passport-Scoped Access Token のとき、AAI 1.2 の手順で Passport に替えて解き、署名付き URL だけを保存する | 原文 | a10、a11 |
 | G-TES-06 | 漏れ | 入力のチェックサムを確かめる欄が無い | `tes/…` `tesInput` | 最小版は確かめない。深める段階で検討(`system.md` C-05) | 原文 | a11 |
 | G-TES-07 | 古い | `tesOutputFileLog.size_bytes` は文字列(「JSON が int64 を扱えないため」と注記) | `tes/…` `size_bytes` | 文字列で返す。読むときは整数に直す | 原文 | tes |
 | G-TES-08 | 食い違い | `view` の説明が `tesTask.Id`・`tesTask.State`(大文字始まり)と書くが、項目名は `id`・`state` | `tes/task_execution_service.openapi.yaml:257` | 項目名(小文字)を正とする | 原文 | tes |
@@ -70,16 +71,18 @@
 
 | 番号 | 種類 | 中身 | 出典 | yai の解釈 | 確かめ | 図の場所 |
 | --- | --- | --- | --- | --- | --- | --- |
-| G-AAI-01 | 組み合わせ | AAI 1.2 では Passport-Scoped Access Token はクライアントと Broker の間だけで使う。一方 DRS は `BearerAuth` を認めるが、その Bearer が何であるべきかは決めていない | `aai/AAIConnectProfile.md:328`、DRS `Auth.md` | DRS の Bearer は yai の AT(`aud=yai-drs`)だけ。PSAT が来たら(`scope` に `ga4gh_passport_v1`)401 | 原文 | a16、a02 |
+| G-AAI-01 | 組み合わせ | AAI 1.2 では Passport-Scoped Access Token はクライアントと Broker の間だけで使う。一方 DRS は `BearerAuth` を認めるが、その Bearer が何であるべきかは決めていない | `aai/AAIConnectProfile.md:328`、DRS `Auth.md` | DRS の Bearer は yai の AT(`aud=yai-drs`)だけ。PSAT が来たら(`scope` に `ga4gh_passport_v1`)401。例外は `drs://` を解く TES(D-069): 自分あての PSAT を受けて Passport に替える | 原文 | a16、a02 |
 | G-AAI-02 | 古い | Visa Access Token は「将来消す提案」。1 時間の規則と Polling が要る | `aai/AAIConnectProfile.md:570,574,700-708` | 受けない(`scope` を持つ Visa は無視)。Visa Document Token だけ | 原文 | ch、m5 |
 | G-AAI-03 | 漏れ | Passport の `aud` は任意。どのサービスあての Passport か分からないと、別のサービスに持ち込まれても区別できない | `aai/…` Passport Format の `aud` | 試験用 Broker は `aud` を付ける。yai-drs は有れば自分を含むことを要求。無いものを受けるかは設定(既定は受ける、仮)。省いたときは yai-drs の起動で WARNING(D-055) | 原文 | a56、ch |
 | G-AAI-04 | 組み合わせ | 秘密を含む応答に `Cache-Control: no-store` などを求めるのは「クライアント・アプリ」の節。DRS の `/access`(署名付き URL を返す)は対象と書かれていない | `aai/…:443-448` | 署名付き URL も秘密として扱い、yai-drs の `/access` 系の応答に同じヘッダーを付ける | 原文 | a08 |
 | G-AAI-05 | 古い | Visa の `typ` は AAIv1.2 タグの時点では必須、その後の Passport の文書(a4ee601)で任意に。版の番号は同じ 1.2 のまま | `passport/ga4gh_passport_v1.md` `typ` の節、`specs/SOURCES.yaml` | いまの文書(任意)に従う。有るなら `vnd.ga4gh.visa+jwt` であること | 原文 | ch、visa-issuer |
 | G-AAI-06 | 漏れ | Passport の `sub` と Visa の `sub` は違いうる。複数の身元の Visa を組み合わせるなら LinkedIdentities が要る | `aai/…` Passport Format の `sub`、`passport/…:192-196` | 最小版は 1 つの判断に 1 つの Visa だけを使い、組み合わせない。複数の Visa が要る方針は LinkedIdentities を作るまで書かない | 原文 | ch |
 | G-AAI-07 | 古い | Passport の文書が AAI の「Token Revocation」の節へ張っているが、AAI 1.2 にその節は無い | `passport/…:1050`、`aai/…` の見出し一覧 | Passport の文書の本文(`asserted`・`exp` を確かめる)だけに従う | 原文 | ch |
-| G-AAI-08 | 漏れ | WES・TES の Bearer と AAI の関係が無い(どのトークンを受けるべきか) | WES `:49`、TES `:56` | yai の AT(D-008)。Passport を Bearer にしない | 原文 | a04、a14、a15、at-issuer |
+| G-AAI-08 | 漏れ | WES・TES の Bearer と AAI の関係が無い(どのトークンを受けるべきか) | WES `:49`、TES `:56` | yai の AT(D-008)。Passport を Bearer にしない。サービスが利用者の代わりに次のサービスを呼ぶときは、利用者の AT を RFC 8693 で宛先の AT に交換し `act` に自分を入れる(D-067、yai の拡張)。TES は `sub` を持ち主、`act.sub` を代理として扱う | 原文 | a04、a14、a15、at-issuer |
 | G-AAI-09 | 漏れ | Broker が OIDC の認可コードの流れを持つこと(MUST)と、試験用の最小 Broker との差 | `aai/…` Conformance for Brokers | 試験用 Broker は認可コードの流れを持たない(固定の利用者表)。**yai-aai の Broker は AAI に適合しない**と明記し、適合の主張は Clearinghouse の部品だけ | 原文 | broker、a01 |
 | G-AAI-10 | 漏れ | Passport の大きさ・1 つの要求の Passport の個数・Passport の中の Visa の個数に上限の決まりが無い。PP-CH-01 の「必要な検査」(AAI の仕様が決める)にも無い。Clearinghouse は信頼した Broker の Passport でも、Visa の数だけ署名を確かめることになる | `passport/ga4gh_passport_v1.md:171-179`(Clearinghouse の処理)、`aai/…` Passport Format | 1 つの要求の Passport は 10 個まで・1 つ 64 KiB まで(超えたら 400)。Visa は 1 つの Passport に 100 個まで(超えたら Passport ごと拒否、D-058 仮)。PP-CH-02(要らない Visa は無視)の意図とずれることを承知で、資源の備え(AAI-CH-04)を優先する | 原文 | ch |
+| G-AAI-11 | 漏れ | Passport の Token Exchange は「client 認証」「subject_token は有効な PSAT」までで、**どの client がどの PSAT を交換できるか**(PSAT の `aud` と client の対応、利用者の同意)は決めていない。PSAT を Broker 以外へ渡さないのは図の説明(非規範)だけ。利用者の代わりに動くサービス(WES・TES)が Passport を得る道も無い(RFC 8693 の `act` に当たるものが Passport に無い) | `aai/AAIConnectProfile.md` Conformance For Passport Issuers 3(2〜6)、Full Login and Token Exchange Interaction | Broker の方針として狭める(D-069): 頼んだ client のサービス名が PSAT の `aud` に入っているときだけ Passport に替える(PSAT の `aud` は「あれば relying party の client ID を含む MUST」)。`aud` の無い PSAT は断る。サービスが利用者の代わりに持つ PSAT は、D-067 の AT→AT の交換で client の `scopes` に `openid ga4gh_passport_v1` が有るときに出る(yai の拡張)。WES はその PSAT を Passport に替えられない(`aud` は TES)。この PSAT の scope は Broker の client の設定から付くもので、利用者の同意の事実(OIDC の同意画面)は無い: 試験用 Broker では設定が同意の代わり。本物の Broker では UserInfo が有効な PSAT に client 認証なしで Visa を返す(MUST)ので、PSAT を渡すことは Visa を読む権利を渡すこと。`aud` の検査で閉じるのは yai-aai の交換の道だけ(G-AAI-12) | 原文 | broker、a09 |
+| G-AAI-12 | 組み合わせ | Broker は UserInfo Endpoint も持たねばならず(Broker の条件 2)、「有効な PSAT を見せられたら Visa を返す MUST」(2.2)。PSAT の `aud` は relying party の client ID で Broker ではないので、UserInfo では「誰が持ってきたか」を `aud` で縛れない。PSAT を下流(WES・TES)に渡す形では、Token Exchange を `aud` で狭めても UserInfo から Visa を読む道が残る | `aai/AAIConnectProfile.md` Conformance for Brokers 2(2.1・2.2)、Passport-Scoped Access Token の `aud` | yai-aai は UserInfo を持たない(試験用 Broker。Token Exchange が SHOULD で優先、2.1)ので今は道が無い。足すときはこの穴を扱う(例: PSAT の持ち主が client 認証で名乗る形は OIDC の UserInfo に無い)。提案 S-3 の材料 | 原文 | broker |
 
 ## 5. 4 つを組み合わせたとき(横断)
 
@@ -92,6 +95,7 @@
 | G-X-05 | 組み合わせ | DRS の `AccessURL.headers`(ヘッダー付きで取る)を TES の入力に渡せない | DRS `AccessURL.yaml`、TES `tesInput` | ヘッダーなしの署名付き URL だけを TES に渡す(`system.md` C-03) | 原文 | a08、a10 |
 | G-X-06 | 漏れ | 3 つの service-info の `type.version` の形(`1.5`・`1.5.0`・`1.1.0`)がそろっていない | DRS の例、TES・WES の `info.version` | 各 OpenAPI の `info.version`(`1.5.0`・`1.1.0`・`1.1.0`) | 作る | drs、tes、wes |
 | G-X-07 | 食い違い | 同じ GA4GH の service-info 1.0.0 の拡張なのに、WES 1.1.0 の `ServiceInfo` は `tags`(string→string)を **required** とし、TES 1.1 の `tesServiceInfo` には `tags` が無い(`tags` は Task にだけ)。追加の項目は schema で禁じられていないが、TES の厳密なクライアント(py-tes 1.1.4 の attrs の型)は知らない項目を拒む(INTEROP-TES-1、2026-10-17) | `wes/workflow_execution_service.openapi.yaml:638`・`:651`(required)、`tes/task_execution_service.openapi.yaml:660`(tesServiceInfo)・`:801`(Task の tags) | WES の service-info には `tags` を入れ、TES の service-info には入れない(D-040、ユーザー 2026-10-17 15:51)。実行役の種類は TES の `description` に書く | 原文 | tes、wes |
+| G-X-08 | 組み合わせ | TES に資格情報の欄が無いので(G-TES-05)、入力は署名付き URL(期限つきの資格情報をクエリに含む)で渡すしかない。TES の振り分け役(ゲートウェイ)はタスクを保存するので、その URL が振り分け役の DB にも残る。仕様にはタスクの中の URL を秘密として扱う決まりが無い。proTES v0.5.0 は `user:password@` の形だけを消し(`url_credentials`)、クエリの署名は MongoDB の `tasks.task`・`tasks.task_original` にそのまま保存する(Passport のデモで実測、2026-11-09) | `tes/task_execution_service.openapi.yaml` の `tesInput.url`、proTES v0.5.0 `docs/configuration.md`(`url_credentials`) | yai-tes は入力を取り終えた書き込み(INITIALIZING → RUNNING)で署名付き URL の問い合わせ部分を消し、終わりの書き込みで `inputs[].content` も消す(D-068・D-043)。yai-wes は終わった run の `request` から消す(D-030)。記録はどちらも問い合わせ部分を書かない。振り分け役や他の TES の保存までは及ばないので、署名付き URL の期限を短くして(既定 60 分)残った URL の害を限る。中継役が署名付き URL を運ばない道として、TES が `drs://` を自分で解く設定(D-069、`drs.enabled` と WES の `resolver.resolve_in_wes: false`)もある | 原文 | tes、wes |
 
 ## 6. 作らないと分からないもの(試験で確かめる)
 
@@ -110,9 +114,9 @@
 
 | 仕様 | 行 | 食い違い | 漏れ | 古い | 組み合わせ |
 | --- | --- | --- | --- | --- | --- |
-| DRS 1.5.0 | 16 | 4 | 10 | 2 | 0 |
+| DRS 1.5.0 | 17 | 4 | 11 | 2 | 0 |
 | TES 1.1 | 13 | 2 | 9 | 2 | 0 |
 | WES 1.1.0 | 13 | 1 | 9 | 2 | 1 |
-| AAI 1.2・Passport 1.2 | 10 | 0 | 5 | 3 | 2 |
-| 4 つを組み合わせたとき(横断) | 7 | 1 | 1 | 0 | 5 |
-| 計 | 59 | 8 | 34 | 9 | 8 |
+| AAI 1.2・Passport 1.2 | 12 | 0 | 6 | 3 | 3 |
+| 4 つを組み合わせたとき(横断) | 8 | 1 | 1 | 0 | 6 |
+| 計 | 63 | 8 | 36 | 9 | 10 |

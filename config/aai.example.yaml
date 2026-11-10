@@ -2,9 +2,9 @@
 # To use it, copy it to config/aai.local.yaml and replace the secrets (*.local.yaml is ignored by git)
 issuer: http://127.0.0.1:8401/
 keys_dir: var/aai/keys          # signing keys (created at startup if missing, 0600)
-test_endpoints: false           # true enables /test/login (test configs only, D-054)
+test_endpoints: false           # true enables /test/login and /test/revoke (test configs only, D-054, D-070)
 passport_aud: [yai-drs]         # C-17
-ttl: {access_token: 900, psat: 900, passport: 7200, visa: 7200}   # D-019
+ttl: {access_token: 900, psat: 900, passport: 7200, visa: 7200, delegated_access_token: 7200}   # D-019; delegated_access_token: what a service gets by exchanging a user's AT (D-067)
 users:                          # test users (aai.md section 6)
   alice:   {scopes: [wes.run, wes.read, wes.cancel, tes.submit, tes.read, tes.cancel, drs.read, drs.access],
             visas: [{value: "https://yai.test/datasets/ds1"}]}
@@ -15,5 +15,10 @@ users:                          # test users (aai.md section 6)
 clients:
   # replace the secret with a random value of 32 or more characters (empty does not start, D-055)
   yai-test-client: {secret: ""}
+  # scopes: what the WES may put on tokens it exchanges for users (D-067). Add openid and
+  # ga4gh_passport_v1 only together with drs.enabled on the TES: the exchanged token is then a
+  # Passport-Scoped Access Token addressed to the TES, which only the TES can exchange for the
+  # user's Passport (D-069); a TES without drs.enabled refuses such a token (401)
   yai-wes: {secret: "", audiences: [yai-tes, yai-drs],
-            scopes: [tes.submit, tes.read, tes.cancel, tes.delegate]}
+            scopes: [tes.submit, tes.read, tes.cancel]}
+  yai-tes: {secret: ""}            # client authentication for the Passport exchange (D-069)

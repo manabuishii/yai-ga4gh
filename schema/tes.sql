@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT NOT NULL UNIQUE,
   owner_iss TEXT NOT NULL,
   owner_sub TEXT NOT NULL,
-  on_behalf_of TEXT,                         -- yai.on_behalf_of of tags (<iss>|<sub>)
+  actor TEXT,                                -- service that submitted for the owner (<iss>|<act.sub> of the AT, D-067)
   run_id TEXT,                               -- yai.run_id of tags
   submit_nonce TEXT,                         -- yai.submit_nonce of tags (no duplicates on resubmission)
   state TEXT NOT NULL,
@@ -61,6 +61,6 @@ CREATE TABLE IF NOT EXISTS output_files (    -- record of outputs; also checks t
   size_bytes INTEGER NOT NULL,
   owner_iss TEXT NOT NULL,
   owner_sub TEXT NOT NULL,
-  on_behalf_of TEXT,
+  actor TEXT,
   run_id TEXT
 );

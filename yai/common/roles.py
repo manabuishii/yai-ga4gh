@@ -49,6 +49,7 @@ class VerifiedCredential:
     exp: int | None = None
     visas: tuple[AcceptedVisa, ...] = ()
     client_id: str | None = None
+    actor: str | None = None  # `act.sub` of a delegated AT: the service acting for sub (D-067)
 
 
 @dataclass(frozen=True)
@@ -59,10 +60,21 @@ class Principal:
     scopes: frozenset[str] = frozenset()
     visas: tuple[AcceptedVisa, ...] = ()
     credentials: tuple[VerifiedCredential, ...] = field(default=(), compare=False)
+    actor: str | None = None  # service acting for this user (`act.sub` of the AT), else None
 
     @property
     def owner(self) -> tuple[str, str]:
         return (self.iss, self.sub)
+
+    @property
+    def actor_ref(self) -> str | None:
+        """`<iss>|<sub>` of the acting service, or None when the subject acts for itself."""
+        return None if self.actor is None else f"{self.iss}|{self.actor}"
+
+    @property
+    def self_ref(self) -> str:
+        """`<iss>|<sub>` of this principal (what a task stores as its actor when it submits)."""
+        return f"{self.iss}|{self.sub}"
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -71,6 +83,7 @@ class Principal:
             "kind": self.kind,
             "scopes": sorted(self.scopes),
             "visas": [v.__dict__ for v in self.visas],
+            "actor": self.actor,
         }
 
 

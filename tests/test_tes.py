@@ -18,7 +18,16 @@ import pytest
 
 from tests import shape
 from tests.servers import Server, Worker, free_port
-from tests.stack import DS1, Creds, bearer, drs_config, register, start_aai, write_config
+from tests.stack import (
+    DS1,
+    TES_CLIENT_SECRET,
+    Creds,
+    bearer,
+    drs_config,
+    register,
+    start_aai,
+    write_config,
+)
 from yai.tes.runner import PathMap
 
 TERMINAL = {"COMPLETE", "EXECUTOR_ERROR", "SYSTEM_ERROR", "CANCELED"}
@@ -27,6 +36,8 @@ SH = "/bin/sh"
 
 def tes_config(aai, tmp: Path, drs_netloc: str, **extra) -> dict:
     iss = aai.root + "/"
+    secret = tmp / "tes-client-secret"
+    secret.write_text(TES_CLIENT_SECRET)
     return {
         "data_dir": str(tmp / "tes-data"),
         "files_root": str(tmp / "tes-files"),
@@ -43,6 +54,15 @@ def tes_config(aai, tmp: Path, drs_netloc: str, **extra) -> dict:
             "insecure_http_hosts": [drs_netloc],
             "retries": 1,
             "backoff_seconds": 0.1,
+        },
+        # the TES resolves drs:// itself (D-069). Hostname form via the override table (G-DRS-01)
+        "drs": {
+            "enabled": True,
+            "token_url": iss + "token",
+            "client_id": "yai-tes",
+            "client_secret_file": str(secret),
+            "passport_hosts": ["drs.yai.test"],
+            "host_override": {"drs.yai.test": f"http://{drs_netloc}"},
         },
         **extra,
     }
@@ -80,6 +100,9 @@ def env(tmp_path_factory):
         bob=bearer(creds.at("bob", "yai-tes")),
         carol=bearer(creds.at("carol", "yai-tes")),
         wes=bearer(creds.service_at("yai-tes")),
+        alice_via_wes=bearer(creds.delegated_at("alice")),  # sub=alice, act.sub=yai-wes (D-067)
+        alice_ps=bearer(creds.psat_for("alice", "yai-tes")),  # passport-scoped for the TES (D-069)
+        bob_ps=bearer(creds.psat_for("bob", "yai-tes")),
         alice_pp=creds.passport("alice"),
         iss=aai.root + "/",
     )
@@ -628,34 +651,110 @@ def test_NEG_OTHER_USER(env):
 
 
 def test_NEG_TAG_SPOOF(env):
+    """Who a task is for comes from the AT (sub, act), never from a tag (D-067): the former
+    yai.on_behalf_of is refused for everyone, as is any unknown yai. tag. The known yai. labels
+    (run_id, submit_nonce) are open to any authenticated caller (D-071)."""
     obo = {"yai.on_behalf_of": f"{env.iss}|bob"}
     assert create(env, task(sh("true"), tags=obo)).status_code == 400
-    assert create(env, task(sh("true"), tags={"yai.run_id": "r1"})).status_code == 400
-    assert create(env, task(sh("true"), tags=obo), who=env.wes).status_code == 200
+    assert create(env, task(sh("true"), tags=obo), who=env.wes).status_code == 400
+    assert create(env, task(sh("true"), tags=obo), who=env.alice_via_wes).status_code == 400
+    assert create(env, task(sh("true"), tags={"yai.owner": "bob"})).status_code == 400
+    assert create(env, task(sh("true"), tags={"yai.run_id": "r1"})).status_code == 200
 
 
 def test_delegated_task_visibility(env):
-    """A task the WES service submitted on behalf of alice.
+    """A task the WES submitted for alice with an exchanged AT (sub=alice, act.sub=yai-wes).
 
-    alice can read it but not cancel it (403); bob cannot see it (404)."""
-    tags = {"yai.on_behalf_of": f"{env.iss}|alice", "yai.run_id": "rtest"}
-    tid = create(env, task(sh("sleep 5"), tags=tags), who=env.wes).json()["id"]
-    assert get(env, tid).status_code == 200
+    The owner is alice: she reads it with her own AT but cannot cancel it (403, that is the
+    WES's job); bob cannot see it (404). The WES reads and cancels it with the exchanged AT and,
+    after a restart lost that AT, with its own service token (it is the task's actor)."""
+    tags = {"yai.run_id": "rtest"}
+    tid = create(env, task(sh("sleep 5"), tags=tags), who=env.alice_via_wes).json()["id"]
+    assert get(env, tid).status_code == 200  # alice directly
+    assert get(env, tid, who=env.alice_via_wes).status_code == 200
+    assert get(env, tid, who=env.wes).status_code == 200  # the acting service, own token
     assert get(env, tid, who=env.bob).status_code == 404
+    seen, _ = page_all(env, env.wes)
+    assert tid in seen
     assert httpx.post(env.url + f"/tasks/{tid}:cancel", headers=env.alice).status_code == 403
     assert httpx.post(env.url + f"/tasks/{tid}:cancel", headers=env.wes).status_code == 200
     assert wait(env, tid, who=env.wes)["state"] == "CANCELED"
+    # ... and the WES cannot see or cancel what alice submitted herself, neither with its own
+    # token nor with the token exchanged for alice (the pair (owner, actor) does not match)
+    own = create(env, task(sh("sleep 5"))).json()["id"]
+    assert get(env, own, who=env.wes).status_code == 404
+    assert get(env, own, who=env.alice_via_wes).status_code == 404
+    assert (
+        httpx.post(env.url + f"/tasks/{own}:cancel", headers=env.alice_via_wes).status_code == 404
+    )
+    seen, _ = page_all(env, env.alice_via_wes)
+    assert own not in seen and tid in seen
+    httpx.post(env.url + f"/tasks/{own}:cancel", headers=env.alice)
 
 
 def test_submit_nonce_is_idempotent(env):
-    tags = {
-        "yai.on_behalf_of": f"{env.iss}|alice",
-        "yai.run_id": "rn",
-        "yai.submit_nonce": f"n{time.time_ns()}",
-    }
-    a = create(env, task(sh("true"), tags=tags), who=env.wes).json()["id"]
-    b = create(env, task(sh("true"), tags=tags), who=env.wes).json()["id"]
-    assert a == b
+    """D-071: the same owner with the same yai.submit_nonce gets the earlier task back, whether
+    the owner submits directly or a service submits for them."""
+    for who in (env.alice_via_wes, env.alice):
+        tags = {"yai.run_id": "rn", "yai.submit_nonce": f"n{time.time_ns()}"}
+        a = create(env, task(sh("true"), tags=tags), who=who).json()["id"]
+        b = create(env, task(sh("true"), tags=tags), who=who).json()["id"]
+        assert a == b
+
+
+def drs_task(env, oid: str | None = None, **extra) -> dict:
+    url = f"drs://drs.yai.test/{oid or env.ds1}"
+    return task(sh("cat /d/in > /d/out"), inputs=[{"path": "/d/in", "url": url}],
+                outputs=[{"path": "/d/out", "url": out_url(env, "drs")}], **extra)  # fmt: skip
+
+
+def test_drs_inputs_resolved_at_the_tes(env):
+    """D-069: a drs:// input is resolved by the TES for the user: the caller's Passport-Scoped
+    Access Token is exchanged for the user's Passport at the broker (AAI 1.2), the DRS answers a
+    signed URL, and only that URL is kept (its query is dropped once fetched, D-068). Both the
+    user's own passport-scoped AT and the one the WES exchanged for the user (act, with the PSAT
+    scopes) work; the system log keeps the drs://."""
+    for who in (env.alice_ps, env.alice_via_wes):
+        t = run(env, drs_task(env), who=who)
+        assert t["state"] == "COMPLETE", t
+        assert file_of(t["outputs"][0]["url"]) == b"hello from drs\n"
+        url = t["inputs"][0]["url"]
+        assert url.startswith("http") and "sig=" not in url and "drs://" not in url
+        logs = json.dumps(t["logs"][0]["system_logs"])
+        assert f"drs://drs.yai.test/{env.ds1}" in logs and "sig=" not in logs
+
+
+def test_NEG_TES_DRS_INPUT(env, tmp_path):
+    """D-069: a plain AT (not passport-scoped) cannot carry drs:// inputs (403); a user without
+    the Visa gets 403 from the DRS; a service's own token carries no user (403); a revoked user's
+    PSAT is refused at the exchange (403, D-070); a drs:// of an unknown object is 400; a TES
+    without drs.enabled refuses the scheme (400) and refuses a PSAT on the Bearer (401, D-008)."""
+    assert create(env, drs_task(env), who=env.alice).status_code == 403
+    assert create(env, drs_task(env), who=env.bob_ps).status_code == 403
+    assert create(env, drs_task(env), who=env.wes).status_code == 403
+    assert create(env, drs_task(env, "no-such-object"), who=env.alice_ps).status_code == 400
+    old = bearer(env.creds.psat_for("alice", "yai-tes"))
+    resend = drs_task(env, tags={"yai.submit_nonce": f"n{time.time_ns()}"})
+    first = create(env, resend, who=old).json()["id"]
+    time.sleep(1.1)  # iat has whole seconds
+    assert httpx.post(env.aai.url + "/test/revoke", json={"username": "alice"}).status_code == 200
+    try:
+        assert create(env, drs_task(env), who=old).status_code == 403
+        # a resend with the same nonce returns the earlier id before any exchange (D-071)
+        assert create(env, resend, who=old).json() == {"id": first}
+    finally:
+        time.sleep(1.1)
+        env.creds.login("alice", [])  # a new login lifts the revocation for the other tests
+    cfg = {k: v for k, v in env.cfg.items() if k != "drs"}
+    cfg["data_dir"] = str(tmp_path / "tes-data")
+    plain = Server("tes", cfg, tmp_path / "tes-plain").start()
+    try:
+        r = httpx.post(plain.url + "/tasks", json=drs_task(env), headers=env.alice)
+        assert r.status_code == 400 and "not enabled" in r.json()["msg"]
+        r = httpx.post(plain.url + "/tasks", json=task(sh("true")), headers=env.alice_ps)
+        assert r.status_code == 401
+    finally:
+        plain.stop()
 
 
 def test_NEG_FILE_CROSS_TASK(env):
@@ -885,7 +984,7 @@ def test_NEG_BODY_AUTH_FIRST(env, tmp_path):
 
 def test_NEG_TES_TASK_LIMIT(tmp_path):
     """N-1: unfinished tasks per user are capped at max_active, even with concurrent submits.
-    Other users and delegated work (per on_behalf_of) are counted separately. A resubmit (same
+    Other users and delegated work (per acting service) are counted separately. A resubmit (same
     nonce) is not counted and returns
     the earlier id. Once one finishes, the next is accepted."""
     import threading
@@ -894,9 +993,9 @@ def test_NEG_TES_TASK_LIMIT(tmp_path):
 
     db = TesDb(tmp_path / "tes.sqlite")
 
-    def make(task_id: str, owner=("iss", "a"), obo=None, nonce=None) -> str | None:
+    def make(task_id: str, owner=("iss", "a"), actor=None, nonce=None) -> str | None:
         try:
-            return db.create(task_id, owner, {}, 0, on_behalf_of=obo, run_id=None,
+            return db.create(task_id, owner, {}, 0, actor=actor, run_id=None,
                              nonce=nonce, max_active=3)  # fmt: skip
         except TaskLimit:
             return None
@@ -909,12 +1008,13 @@ def test_NEG_TES_TASK_LIMIT(tmp_path):
         t.join()
     assert sum(m is not None for m in made) == 3
     assert make("other", ("iss", "b"))  # other users are not blocked
-    svc = ("iss", "wes")
-    assert make("d1", svc, "iss|a", "n1") == "d1"  # delegated work is separate from direct work
-    assert make("d1-again", svc, "iss|a", "n1") == "d1"  # a resubmit returns the earlier id
-    assert make("d2", svc, "iss|a") and make("d3", svc, "iss|a")
-    assert make("d4", svc, "iss|a") is None and make("d5", svc, "iss|b")
-    assert make("d1-retry", svc, "iss|a", "n1") == "d1"  # even at the limit, resubmit: earlier id
+    wes = "iss|wes"
+    a, b = ("iss", "a"), ("iss", "b")
+    assert make("d1", a, wes, "n1") == "d1"  # work a service does for a is separate from a's own
+    assert make("d1-again", a, wes, "n1") == "d1"  # a resubmit returns the earlier id
+    assert make("d2", a, wes) and make("d3", a, wes)
+    assert make("d4", a, wes) is None and make("d5", b, wes)
+    assert make("d1-retry", a, wes, "n1") == "d1"  # even at the limit, resubmit: earlier id
     done = next(m for m in made if m)
     assert db.transition(done, "QUEUED", "CANCELING")
     assert db.transition(done, "CANCELING", "CANCELED")

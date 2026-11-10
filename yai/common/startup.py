@@ -108,6 +108,8 @@ def check(service: str, config: dict[str, Any]) -> None:
         if auth.get("mode") == "aai":
             _keys("auth", auth)
         _insecure("auth", auth)
+        if "accept_passport_scoped" in auth:  # decided by the service (the TES with drs.enabled)
+            raise SystemExit("auth.accept_passport_scoped is not a configuration key (D-069)")
     {"aai": _check_aai, "drs": _check_drs, "tes": _check_tes, "tes-worker": _check_tes_worker,
      "wes": _check_wes}[service](config)  # fmt: skip
 
@@ -122,6 +124,9 @@ def _check_aai(config: dict[str, Any]) -> None:
         # the effective sub uses the same formula as issuance (client_credentials in yai/aai/app.py)
         if str(client.get("sub", cid)) in users:
             raise SystemExit(f"clients.{cid}: its sub must not be a user name")
+        # services are recognised by client_id == sub (service_auth.py), so the two must agree
+        if str(client.get("sub", cid)) != cid:
+            raise SystemExit(f"clients.{cid}.sub must equal the client id (or be left out)")
     for key, value in (config.get("ttl") or {}).items():
         _range(f"ttl.{key}", value, 1, DAY)
     for name, user in users.items():
@@ -149,6 +154,20 @@ def _check_tes(config: dict[str, Any]) -> None:
         _range(f"limits.{key}", limits.get(key, 100), 0)
     _bytes(config)
     _insecure("fetch", config.get("fetch") or {})
+    drs = config.get("drs") or {}
+    if drs.get("enabled"):  # the TES resolves drs:// inputs itself (D-069)
+        if not drs.get("client_secret_file"):
+            raise SystemExit("drs.client_secret_file is required when drs.enabled is true")
+        _check_resolver("drs", config.get("fetch") or {}, drs)
+        _check_service_url("drs.token_url", str(drs.get("token_url", "")))
+        # the broker hands out the Passport only to the client whose service name
+        # (`clients.<id>.service`, default the client id) the PSAT's aud names (D-069). The PSATs
+        # this TES receives are addressed to auth.audience, so that is the name to compare
+        audience = (config.get("auth") or {}).get("audience")
+        service = str(drs.get("service_name", drs.get("client_id", "yai-tes")))
+        if audience is not None and service != str(audience):
+            raise SystemExit("drs.service_name (default drs.client_id) must equal auth.audience: "
+                             "the PSATs this TES receives are addressed to that name")  # fmt: skip
     mode = (config.get("auth") or {}).get("mode")
     if mode == "anonymous" and _runner(config) == "local-process":
         log.warning("yai-tes: auth.mode anonymous with the local-process runner: anyone who "
@@ -176,40 +195,62 @@ def _bytes(config: dict[str, Any]) -> None:
         _range(key, config.get(key, 10 * 1024**3), 1)
 
 
+def _check_resolver(where: str, fetch: dict[str, Any], res: dict[str, Any]) -> None:
+    """Resolver targets: the same Fetcher check resolver.py uses at run time."""
+    fetcher = Fetcher(allow=list(fetch.get("allow", [])),
+                      insecure_http_hosts=list(fetch.get("insecure_http_hosts", [])))  # fmt: skip
+    urls = [
+        (f"{where}.host_override.{k}", f"{v}/ga4gh/drs/v1")
+        for k, v in (res.get("host_override") or {}).items()
+    ]
+    urls += [
+        (f"{where}.compact.{k}", str(v).replace("{id}", "x"))
+        for k, v in (res.get("compact") or {}).items()
+    ]
+    for key, url in urls:
+        try:
+            fetcher.check(url)
+        except FetchError as exc:
+            raise SystemExit(f"{key}: {exc.reason} (see fetch.allow)") from None
+
+
+def _check_service_url(where: str, url: str) -> None:
+    """URLs of other yai services have no run-time check, so http only for loopback."""
+    try:
+        scheme, hp = host_port(url)
+    except FetchError as exc:
+        raise SystemExit(f"{where}: {exc.reason}") from None
+    if scheme == "http" and not is_loopback(_host(hp)):
+        raise SystemExit(f"{where}: plain http is allowed only for loopback")
+    if scheme not in ("http", "https"):
+        raise SystemExit(f"{where} must be https")
+
+
 def _check_wes(config: dict[str, Any]) -> None:
     _range("max_active_runs_per_user", config.get("max_active_runs_per_user", 16), 0)
     fetch = config.get("fetch") or {}
     _insecure("fetch", fetch)
-    # resolver targets: the same Fetcher check resolver.py uses at run time
-    fetcher = Fetcher(allow=list(fetch.get("allow", [])),
-                      insecure_http_hosts=list(fetch.get("insecure_http_hosts", [])))  # fmt: skip
-    res = config.get("resolver") or {}
-    urls = [
-        (f"resolver.host_override.{k}", f"{v}/ga4gh/drs/v1")
-        for k, v in (res.get("host_override") or {}).items()
-    ]
-    urls += [
-        (f"resolver.compact.{k}", str(v).replace("{id}", "x"))
-        for k, v in (res.get("compact") or {}).items()
-    ]
-    for where, url in urls:
-        try:
-            fetcher.check(url)
-        except FetchError as exc:
-            raise SystemExit(f"{where}: {exc.reason} (see fetch.allow)") from None
-    # tes.url and tes.token_url have no run-time check, so http only for loopback
+    _check_resolver("resolver", fetch, config.get("resolver") or {})
     tes = config.get("tes") or {}
     for key in ("url", "token_url"):
-        if key not in tes:
-            continue
-        try:
-            scheme, hp = host_port(str(tes[key]))
-        except FetchError as exc:
-            raise SystemExit(f"tes.{key}: {exc.reason}") from None
-        if scheme == "http" and not is_loopback(_host(hp)):
-            raise SystemExit(f"tes.{key}: plain http is allowed only for loopback")
-        if scheme not in ("http", "https"):
-            raise SystemExit(f"tes.{key} must be https")
+        if key in tes:
+            _check_service_url(f"tes.{key}", str(tes[key]))
+    if not wes_tes_scopes(tes):  # an empty `scope` would mean "all of the client's" (D-069)
+        raise SystemExit("tes.scopes must name at least one TES scope (openid and "
+                         "ga4gh_passport_v1 are not taken from here)")  # fmt: skip
+
+
+PSAT_SCOPES = frozenset({"openid", "ga4gh_passport_v1"})  # the Passport-Scoped Access Token scopes
+
+
+def wes_tes_scopes(tes: dict[str, Any]) -> list[str]:
+    """The scopes the WES asks for in the exchange (D-067): `tes.scopes` (each entry may hold
+    several, separated by spaces) without the Passport scopes, which come only from
+    `resolver.resolve_in_wes: false` (D-069), never from configuration alone."""
+    raw = tes.get("scopes", ["tes.submit", "tes.read", "tes.cancel"])
+    if not isinstance(raw, list):
+        raw = [raw]
+    return [w for s in raw for w in str(s).split() if w not in PSAT_SCOPES]
 
 
 def log_start(service: str, config: dict[str, Any], config_path: str | None) -> None:

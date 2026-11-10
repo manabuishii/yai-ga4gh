@@ -6,7 +6,7 @@ concurrency: 2
 max_runtime_seconds: 86400
 max_input_bytes: 10737418240
 max_output_bytes: 10737418240     # total outputs of one task (SYSTEM_ERROR above it, D-044)
-max_active_tasks_per_user: 16    # unfinished tasks per user (429 above it, 0 = no limit; delegated ones per on_behalf_of, D-053)
+max_active_tasks_per_user: 16    # unfinished tasks per (owner, acting service) pair (429 above it, 0 = no limit; D-053, D-067)
 limits: {max_cpu: 2, max_ram_gb: 4, max_inputs: 100, max_outputs: 100}   # 0, negative or above the limit: 400; default 1 CPU, 2 GB. Counts above the limit: 400
 auth:
   mode: aai                       # aai | anonymous (for the official conformance tools) | static-bearer
@@ -17,4 +17,14 @@ auth:
 fetch:                            # common https fetcher of inputs (tes.md section 2)
   allow: ["drs.yai.test:443"]
   insecure_http_hosts: ["127.0.0.1:8402"]   # http allowed only in the unit tests (yai-drs)
+drs:                              # drs:// inputs resolved by this TES for the caller (D-069, a yai extension)
+  enabled: false                  # default off: inputs are https (signed URLs), file:// or content
+  token_url: http://127.0.0.1:8401/token    # broker: the caller's AT -> the user's Passport (RFC 8693)
+  client_id: yai-tes              # a client of the broker (clients.yai-tes); the caller's Bearer must be passport-scoped
+  # service_name: yai-tes         # the broker's clients.<id>.service for that client (default: client_id); must equal auth.audience
+  client_secret_file: var/tes/client-secret # not in git
+  audience: yai-drs               # aud of the Passport asked for
+  passport_hosts: [drs.yai.test]  # DRS hosts that may receive Passports (same rules as the WES resolver)
+  host_override: {drs.yai.test: "http://127.0.0.1:8402"}   # unit tests only (G-DRS-01)
+  compact: {yaitest.drs: "http://127.0.0.1:8402/ga4gh/drs/v1/objects/{id}"}   # G-DRS-02
 # faults: {after_executor_start: exit}     # test configs only: fault injection point

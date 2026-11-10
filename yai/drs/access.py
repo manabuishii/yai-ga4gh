@@ -62,6 +62,10 @@ class DrsAccess:
         )
         self.clearinghouse = Clearinghouse(self.trust, fetcher)
         self.url_ttl = int(config.get("signed_url_ttl_seconds", 3600))  # D-019
+        # D-072 (a yai extension): tell callers which Visa an object needs before they send a
+        # Passport. Off when the dataset names must not be public
+        authz = config.get("authorizations") or {}
+        self.expose_dataset = bool(authz.get("expose_dataset", True))
         self.public_base = str(config.get("public_base_url", "http://127.0.0.1:8402")).rstrip("/")
         self.secret = load_secret(Path(config.get("url_secret_file", root / "url-secret")))
 
@@ -107,7 +111,7 @@ class DrsAccess:
         raise ApiError(403, "forbidden")
 
     def authorizations(self, record: DrsRecord, policy: str) -> dict[str, Any]:
-        """OPTIONS and AccessMethod.authorizations (DRS-AUTH-02/04/05)."""
+        """OPTIONS and AccessMethod.authorizations (DRS-AUTH-02/04/05, D-072)."""
         out: dict[str, Any] = {"drs_object_id": record.id}
         if self.mode != "aai" or policy == "public":
             out["supported_types"] = ["None"]
@@ -118,6 +122,12 @@ class DrsAccess:
         else:
             out["supported_types"] = ["PassportAuth"]
             out["passport_auth_issuers"] = sorted(self.trust.visa_issuers)
+            if self.expose_dataset and record.dataset:
+                # Not in DRS 1.5.0 (Authorizations has no "which Visa" field, G-DRS-17). A router
+                # can pick a site by dataset without reading the Passport first (D-072)
+                out["yai_required_visas"] = [
+                    {"type": "ControlledAccessGrants", "value": record.dataset}
+                ]
         return out
 
     # --- signed URLs (drs.md section 2) ---

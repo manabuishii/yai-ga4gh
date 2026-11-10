@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 
 import httpx
 import pytest
 
 from tests.servers import Server, free_port
-from tests.stack import TEST_CLIENT_SECRET, WES_CLIENT_SECRET
+from tests.stack import TES_CLIENT_SECRET, TEST_CLIENT_SECRET, WES_CLIENT_SECRET
 from tests.tokens import now
 from yai.aai.clearinghouse import AccessTokenVerifier, Clearinghouse, TrustConfig
 from yai.aai.jwtutil import unverified_parts
@@ -33,8 +34,10 @@ CLIENTS = {
     "yai-wes": {
         "secret": WES_CLIENT_SECRET,
         "audiences": ["yai-tes", "yai-drs"],
-        "scopes": ["tes.submit", "tes.read", "tes.cancel", "tes.delegate"],
+        "scopes": ["tes.submit", "tes.read", "tes.cancel", "openid", "ga4gh_passport_v1"],
     },
+    # also a second service in the chain: the TES exchanges the token it got for the DRS
+    "yai-tes": {"secret": TES_CLIENT_SECRET, "audiences": ["yai-drs"], "scopes": ["drs.read"]},
 }
 
 
@@ -55,8 +58,9 @@ def aai(serve, tmp_path):
     s.stop()
 
 
-def login(aai, user="alice", aud=()):
-    r = httpx.post(aai.url + "/test/login", json={"username": user, "aud": list(aud)})
+def login(aai, user="alice", aud=(), passport_aud=()):
+    r = httpx.post(aai.url + "/test/login", json={"username": user, "aud": list(aud),
+                                                  "passport_aud": list(passport_aud)})  # fmt: skip
     r.raise_for_status()
     return r.json()
 
@@ -164,7 +168,7 @@ def test_client_credentials_and_user_at(aai):
     fetcher = KeyFetcher(insecure_http_hosts=[f"127.0.0.1:{aai.port}"])
     v = AccessTokenVerifier(iss, iss + ".well-known/jwks.json", "yai-tes", fetcher)
     claims = v.verify(at, now())
-    assert set(claims["scope"].split()) == {"tes.submit", "tes.read", "tes.cancel", "tes.delegate"}
+    assert set(claims["scope"].split()) == {"tes.submit", "tes.read", "tes.cancel"}
     bad_aud = {"grant_type": "client_credentials", "audience": "yai-wes"}
     r = httpx.post(aai.url + "/token", data=bad_aud, auth=("yai-wes", WES_CLIENT_SECRET))
     assert r.status_code == 400
@@ -175,6 +179,221 @@ def test_client_credentials_and_user_at(aai):
     assert v2.verify(user_at, now())["sub"] == "alice"
 
 
+def exchange_at(aai, subject, client=("yai-wes", WES_CLIENT_SECRET), **over):
+    """RFC 8693 exchange of an access token for the next service (D-067), as the given client."""
+    form = {
+        "grant_type": EXCHANGE,
+        "requested_token_type": AT_TYPE,
+        "subject_token": subject,
+        "subject_token_type": AT_TYPE,
+        "audience": "yai-tes",
+    }
+    form.update(over)
+    form = {k: v for k, v in form.items() if v is not None}
+    return httpx.post(aai.url + "/token", data=form, auth=client)
+
+
+def test_AAI_EXCHANGE_AT(aai):
+    """D-067: the WES exchanges the user's AT (issued to the WES) for an AT for the TES. The
+    result names the user as sub and the WES in act.sub, carries the client's scopes for that
+    audience, lives as long as a Passport by default, and passes the TES's verifier."""
+    subject = login(aai, aud=["yai-wes"])["access_tokens"]["yai-wes"]
+    r = exchange_at(aai, subject)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["issued_token_type"] == AT_TYPE and body["token_type"] == "Bearer"
+    assert body["expires_in"] == 7200
+    header, claims = unverified_parts(body["access_token"])
+    assert header["typ"] == "at+jwt"
+    assert claims["sub"] == "alice" and claims["aud"] == "yai-tes"
+    assert claims["act"] == {"sub": "yai-wes"} and claims["client_id"] == "yai-wes"
+    # the client's scopes; with openid ga4gh_passport_v1 the token is a PSAT the TES can exchange
+    assert set(claims["scope"].split()) == {"tes.submit", "tes.read", "tes.cancel", "openid",
+                                            "ga4gh_passport_v1"}  # fmt: skip
+    fetcher = KeyFetcher(insecure_http_hosts=[f"127.0.0.1:{aai.port}"])
+    v = AccessTokenVerifier(aai.root + "/", aai.root + "/.well-known/jwks.json", "yai-tes", fetcher)
+    with pytest.raises(Exception, match="passport-scoped"):
+        v.verify(body["access_token"], now())  # a PSAT: refused unless the service exchanges it
+    v = AccessTokenVerifier(aai.root + "/", aai.root + "/.well-known/jwks.json", "yai-tes",
+                            fetcher, passport_scoped=True)  # fmt: skip
+    assert v.verify(body["access_token"], now())["act"]["sub"] == "yai-wes"
+    # a narrower scope may be asked for; unknown ones are dropped
+    r = exchange_at(aai, subject, scope="tes.read tes.delegate")
+    assert r.json()["scope"] == "tes.read"
+    # the exchanged token is for the TES, not for the WES: the WES cannot exchange it again
+    r2 = exchange_at(aai, body["access_token"], audience="yai-drs")
+    assert r2.status_code == 400 and r2.json()["error"] == "invalid_grant"
+
+
+def test_NEG_EXCHANGE_AT(aai):
+    """D-067: a client can only act for users who called it. A token issued to another service,
+    a PSAT, a service's own token, or an audience the client may not hold are refused."""
+    other = login(aai, aud=["yai-tes"])["access_tokens"]["yai-tes"]  # not issued to the WES
+    r = exchange_at(aai, other)
+    assert r.status_code == 400 and r.json()["error"] == "invalid_grant"
+    psat = login(aai)["passport_scoped_access_token"]
+    assert exchange_at(aai, psat).json()["error"] == "invalid_grant"
+    subject = login(aai, aud=["yai-wes"])["access_tokens"]["yai-wes"]
+    assert exchange_at(aai, subject, audience="yai-wes").json()["error"] == "invalid_target"
+    assert exchange_at(aai, subject, audience=None).json()["error"] == "invalid_target"
+    basic = ("yai-wes", WES_CLIENT_SECRET)
+    svc = httpx.post(aai.url + "/token", auth=basic,
+                     data={"grant_type": "client_credentials", "audience": "yai-tes"})  # fmt: skip
+    r = exchange_at(aai, svc.json()["access_token"])
+    assert r.status_code == 400 and r.json()["error"] == "invalid_grant"
+    # the test client has no audiences: it cannot act for anyone
+    r = exchange_at(aai, subject, client=("yai-test-client", TEST_CLIENT_SECRET))
+    assert r.json()["error"] == "invalid_target"
+    # actor_token is not part of yai's profile (the actor is the authenticated client)
+    assert exchange_at(aai, subject, actor_token="x").json()["error"] == "invalid_request"
+    # the passport exchange still requires a PSAT
+    bad = exchange(aai, subject)
+    assert bad.status_code == 400 and bad.json()["error"] == "invalid_grant"
+
+
+def passport_as(aai, subject, client=("yai-tes", TES_CLIENT_SECRET), **over):
+    """Passport exchange as the given client (AAI 1.2 "Conformance For Passport Issuers" 3)."""
+    form = {
+        "grant_type": EXCHANGE,
+        "requested_token_type": PASSPORT_TYPE,
+        "subject_token": subject,
+        "subject_token_type": AT_TYPE,
+    }
+    form.update(over)
+    form = {k: v for k, v in form.items() if v is not None}
+    return httpx.post(aai.url + "/token", data=form, auth=client)
+
+
+def test_AAI_PASSPORT_FROM_DELEGATED_PSAT(aai):
+    """D-069: the AT the WES exchanges for a user (D-067) is a Passport-Scoped Access Token when
+    the client's scopes include openid ga4gh_passport_v1. Only the client the PSAT's aud names
+    (the TES) gets the user's Passport from it; the WES, which holds the token, cannot (AAI 1.2
+    leaves this to the broker; this broker binds the exchange to aud). The Passport is the
+    user's own (sub, Visas, the asked aud; no act)."""
+    subject = login(aai, aud=["yai-wes"])["access_tokens"]["yai-wes"]
+    psat = exchange_at(aai, subject).json()["access_token"]
+    r = passport_as(aai, psat, audience="yai-drs")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["issued_token_type"] == PASSPORT_TYPE and body["token_type"] == "N_A"
+    header, claims = unverified_parts(body["access_token"])
+    assert header["typ"] == "vnd.ga4gh.passport+jwt"
+    assert claims["sub"] == "alice" and claims["aud"] == "yai-drs" and "act" not in claims
+    assert len(claims["ga4gh_passport_v1"]) == 1
+    r = passport_as(aai, psat, client=("yai-wes", WES_CLIENT_SECRET))
+    assert r.status_code == 400
+    assert r.json()["error_description"] == "subject_token was not issued to this client"
+    # the user's own AT for the TES, passport-scoped by the login (consent to fetch the Passport)
+    own = login(aai, aud=["yai-tes"], passport_aud=["yai-tes"])["access_tokens"]["yai-tes"]
+    assert passport_as(aai, own).status_code == 200
+    # a narrowed exchange without the PSAT scopes yields a plain AT: no Passport from it
+    plain = exchange_at(aai, subject, scope="tes.submit tes.read tes.cancel").json()
+    assert passport_as(aai, plain["access_token"]).json()["error"] == "invalid_grant"
+    # a service's own token never carries the PSAT scopes, whatever the client's scopes say
+    svc = httpx.post(aai.url + "/token", auth=("yai-wes", WES_CLIENT_SECRET),
+                     data={"grant_type": "client_credentials", "audience": "yai-tes"})  # fmt: skip
+    assert "ga4gh_passport_v1" not in unverified_parts(svc.json()["access_token"])[1]["scope"]
+
+
+def test_NEG_PASSPORT_FROM_PLAIN_AT(aai):
+    """AAI 1.2: the subject of a Passport exchange must be a PSAT. A plain user AT (no
+    ga4gh_passport_v1 scope), a service's own token and a revoked user's PSAT (D-070) are
+    refused; client authentication is required; the login PSAT (aud = the login client) cannot
+    be exchanged by another client (D-069)."""
+    plain = login(aai, aud=["yai-tes"])["access_tokens"]["yai-tes"]
+    r = passport_as(aai, plain)
+    assert r.status_code == 400 and r.json()["error"] == "invalid_grant"
+    login_psat = login(aai)["passport_scoped_access_token"]  # aud: yai-test-client
+    r = passport_as(aai, login_psat)  # as yai-tes
+    assert r.json()["error_description"] == "subject_token was not issued to this client"
+    assert exchange(aai, login_psat).status_code == 200  # as yai-test-client
+    svc = httpx.post(aai.url + "/token", auth=("yai-wes", WES_CLIENT_SECRET),
+                     data={"grant_type": "client_credentials", "audience": "yai-tes"})  # fmt: skip
+    assert passport_as(aai, svc.json()["access_token"]).json()["error"] == "invalid_grant"
+    psat = login(aai, aud=["yai-tes"], passport_aud=["yai-tes"])["access_tokens"]["yai-tes"]
+    r = httpx.post(aai.url + "/token", data={
+        "grant_type": EXCHANGE, "requested_token_type": PASSPORT_TYPE,
+        "subject_token": psat, "subject_token_type": AT_TYPE})  # fmt: skip
+    assert r.status_code == 401  # no client authentication
+    time.sleep(1.1)
+    assert httpx.post(aai.url + "/test/revoke", json={"username": "alice"}).status_code == 200
+    r = passport_as(aai, psat)
+    assert r.json() == {"error": "invalid_grant", "error_description": "subject_token was revoked"}
+
+
+def test_AAI_EXCHANGE_AT_NESTED(aai):
+    """D-067: the next service exchanges the token it received (sub=alice, act.sub=yai-wes) for
+    its own downstream audience; the new actor is outermost and the previous one nests
+    (RFC 8693 section 4.1). The scopes are the second client's."""
+    subject = login(aai, aud=["yai-wes"])["access_tokens"]["yai-wes"]
+    for_tes = exchange_at(aai, subject).json()["access_token"]
+    r = exchange_at(aai, for_tes, client=("yai-tes", TES_CLIENT_SECRET), audience="yai-drs")
+    assert r.status_code == 200, r.text
+    claims = unverified_parts(r.json()["access_token"])[1]
+    assert claims["sub"] == "alice" and claims["aud"] == "yai-drs"
+    assert claims["act"] == {"sub": "yai-tes", "act": {"sub": "yai-wes"}}
+    assert claims["scope"] == "drs.read"
+    # the WES cannot exchange the TES-addressed token for the DRS (not issued to it)
+    assert exchange_at(aai, for_tes, audience="yai-drs").json()["error"] == "invalid_grant"
+
+
+def test_revocation_covers_the_same_second(tmp_path, monkeypatch):
+    """D-070: a token issued in the same second as the revocation is refused too (the cutoff is
+    now + 1). Deterministic: the broker runs in-process on a clock that does not move."""
+    from fastapi.testclient import TestClient
+
+    from yai.aai import app as aai_app
+    from yai.common.timeutil import Clock
+
+    clock = Clock()
+    clock.offset = 1_000_000  # a fixed, large offset; the test moves it by hand
+    real_now = clock.now()
+    clock.now = lambda: real_now  # type: ignore[method-assign]
+    monkeypatch.setattr(aai_app, "Clock", lambda: clock)
+    cfg = {"issuer": "http://127.0.0.1:1/", "keys_dir": str(tmp_path / "keys"), "users": USERS,
+           "clients": CLIENTS, "test_endpoints": True}  # fmt: skip
+    c = TestClient(aai_app.create_app(cfg))
+    psat = c.post("/test/login", json={"username": "alice", "aud": []}).json()
+    psat = psat["passport_scoped_access_token"]
+    form = {"grant_type": EXCHANGE, "requested_token_type": PASSPORT_TYPE,
+            "subject_token": psat, "subject_token_type": AT_TYPE}  # fmt: skip
+    auth = ("yai-test-client", TEST_CLIENT_SECRET)
+    assert c.post("/token", data=form, auth=auth).status_code == 200
+    assert c.post("/test/revoke", json={"username": "alice"}).status_code == 200  # same second
+    r = c.post("/token", data=form, auth=auth)
+    assert r.status_code == 400 and r.json()["error_description"] == "subject_token was revoked"
+    # a token issued one second after the revocation is fine
+    clock.now = lambda: real_now + 1  # type: ignore[method-assign]
+    later = c.post("/test/login", json={"username": "alice", "aud": []}).json()
+    form["subject_token"] = later["passport_scoped_access_token"]
+    assert c.post("/token", data=form, auth=auth).status_code == 200
+
+
+def test_NEG_REVOKE_AT_EXCHANGE(aai):
+    """D-070: after /test/revoke, tokens issued to the user before it are refused at every
+    exchange (PSAT -> Passport, AT -> delegated AT); the user table is read again at each
+    exchange. A new login lifts the revocation. What was already issued is not recalled."""
+    old = login(aai, aud=["yai-wes"])
+    psat, at = old["passport_scoped_access_token"], old["access_tokens"]["yai-wes"]
+    assert exchange(aai, psat).status_code == 200
+    delegated = exchange_at(aai, at).json()["access_token"]
+    time.sleep(1.1)  # iat has whole seconds; a revoke in the same second must still cover it
+    r = httpx.post(aai.url + "/test/revoke", json={"username": "alice"})
+    assert r.status_code == 200 and r.json()["username"] == "alice"
+    assert exchange(aai, psat).json()["error"] == "invalid_grant"
+    assert exchange_at(aai, at).json()["error"] == "invalid_grant"
+    fetcher = KeyFetcher(insecure_http_hosts=[f"127.0.0.1:{aai.port}"])
+    v = AccessTokenVerifier(aai.root + "/", aai.root + "/.well-known/jwks.json", "yai-tes",
+                            fetcher, passport_scoped=True)  # fmt: skip
+    assert v.verify(delegated, now())["sub"] == "alice"  # already issued: valid until exp
+    assert httpx.post(aai.url + "/test/revoke", json={"username": "nobody"}).status_code == 404
+    time.sleep(1.1)  # the new login must be after the revocation second
+    new = login(aai, aud=["yai-wes"])
+    assert exchange(aai, new["passport_scoped_access_token"]).status_code == 200
+    assert exchange_at(aai, new["access_tokens"]["yai-wes"]).status_code == 200
+    assert exchange(aai, psat).status_code == 200  # the new login lifted it
+
+
 def test_NEG_TEST_ENDPOINTS(serve, tmp_path):
     """D-054: test endpoints are registered only when enabled. /test/clock never exists. The visas
     endpoint exists only with test_visa_endpoint. Setting clock_offset_seconds blocks startup.
@@ -182,21 +401,22 @@ def test_NEG_TEST_ENDPOINTS(serve, tmp_path):
     from yai.common import startup
 
     paths = [("post", "/test/login"), ("put", "/test/users/alice/visas"),
-             ("get", "/untrusted-visa/jwks.json"), ("post", "/test/clock")]  # fmt: skip
+             ("get", "/untrusted-visa/jwks.json"), ("post", "/test/clock"),
+             ("post", "/test/revoke")]  # fmt: skip
 
     def codes(s):
         return [httpx.request(m, s.url + p, json={"username": "alice", "visas": []}).status_code
                 for m, p in paths]  # fmt: skip
 
     off = serve("aai", {"keys_dir": str(tmp_path / "k")}, name="off")
-    assert codes(off) == [404, 404, 404, 404]
+    assert codes(off) == [404, 404, 404, 404, 404]
     base = {"keys_dir": str(tmp_path / "k"), "users": USERS, "test_endpoints": True}
     on = serve("aai", base, name="on")
-    assert codes(on) == [200, 404, 200, 404]
+    assert codes(on) == [200, 404, 200, 404, 200]
     big = httpx.post(on.url + "/test/login", content=b'{"username": "' + b"a" * (2 << 20) + b'"}')
     assert big.status_code == 400 and "larger than" in big.text
     visas = serve("aai", {**base, "test_visa_endpoint": True}, name="visas")
-    assert codes(visas) == [200, 200, 200, 404]
+    assert codes(visas) == [200, 200, 200, 404, 200]
     bad_ttl = httpx.put(visas.url + "/test/users/alice/visas",
                         json={"visas": [{"value": "x", "ttl": 10**9}]})  # fmt: skip
     assert bad_ttl.status_code == 400

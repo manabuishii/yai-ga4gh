@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS runs (
   state TEXT NOT NULL,
   request_json TEXT NOT NULL,                -- RunRequest (without yai_passports)
   needs_passport INTEGER NOT NULL DEFAULT 0, -- whether resolving inputs needs the Passport held in memory
+  delegated INTEGER NOT NULL DEFAULT 0,      -- TES is called with a token exchanged from the user's (held in memory, D-067)
   created_at INTEGER NOT NULL,
   start_time INTEGER,
   end_time INTEGER,

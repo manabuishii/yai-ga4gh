@@ -16,7 +16,12 @@ from yai.common.timeutil import rfc3339
 
 READ_ONLY = ("id", "state", "logs", "creation_time")  # TES-CRT-08
 FORBIDDEN_ROOTS = ("/proc", "/sys", "/dev", "/etc")
-YAI_TAGS = ("yai.on_behalf_of", "yai.run_id", "yai.submit_nonce")
+# yai's own tags (a yai extension, D-067/D-071): any authenticated caller may set them.
+# yai.run_id groups the tasks of one WES run; yai.submit_nonce is the caller's idempotency key
+# (same owner + same nonce returns the earlier task). Who the task is for is not a tag: it is
+# the `sub` of the AT, and the acting service its `act.sub`
+YAI_TAGS = ("yai.run_id", "yai.submit_nonce")
+PSAT_SCOPES = {"openid", "ga4gh_passport_v1"}  # a Passport-Scoped Access Token (AAI 1.2)
 MAX_CONTENT = 1 << 20  # content of at least 128 KiB is accepted (TES-CRT-05). The limit is 1 MiB
 
 
@@ -100,6 +105,7 @@ def validate_task(
     fetcher: Fetcher,
     limits: Limits,
     output_owner,
+    drs_enabled: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """Check a received tesTask and return the form to store plus warnings. 400 if invalid."""
     if not isinstance(body, dict):
@@ -172,6 +178,16 @@ def validate_task(
                 fetcher.check(url)
             except FetchError as exc:  # broken ports, IPv6 etc. too (host_port)
                 raise bad(f"inputs[{i}].url: {exc.reason}") from exc  # NEG-SSRF
+        elif scheme == "drs" and drs_enabled:
+            # resolved by the API before the task is saved (D-069), with the user's Passport
+            # exchanged from the caller's token: it must be a Passport-Scoped Access Token of a
+            # user (scope openid ga4gh_passport_v1; the user, or a service acting for them)
+            if principal.kind != "user" or not set(principal.scopes) >= PSAT_SCOPES:
+                raise ApiError(403, f"inputs[{i}].url: drs:// inputs need the user's "
+                               "passport-scoped token")  # fmt: skip
+            inp["_drs"] = url
+        elif scheme == "drs":
+            raise bad(f"inputs[{i}].url: drs:// inputs are not enabled on this TES")
         else:
             raise bad(f"inputs[{i}].url: unsupported scheme")
 
@@ -237,32 +253,26 @@ def validate_task(
         warnings.append(f"backend_parameters ignored: {sorted(params)}")
     task["resources"] = res
 
-    # tags (yai. only for services plus tes.delegate, NEG-TAG-SPOOF)
+    # tags (yai. ones are known labels anyone may set; "who for" comes from the AT, NEG-TAG-SPOOF)
     tags = optional(task, "tags", dict, "tags", {})
     if not all(isinstance(k, str) and isinstance(v, str) for k, v in tags.items()):
         raise bad("tags must map strings to strings")
-    if any(k.startswith("yai.") for k in tags):
-        if principal.kind != "service" or "tes.delegate" not in principal.scopes:
-            raise bad("tags starting with 'yai.' are reserved")
-        if any(k.startswith("yai.") and k not in YAI_TAGS for k in tags):
-            raise bad("unknown yai. tag")
-        obo = tags.get("yai.on_behalf_of", "")
-        if obo and obo.count("|") != 1:
-            raise bad("yai.on_behalf_of must be <iss>|<sub>")
+    if any(k.startswith("yai.") and k not in YAI_TAGS for k in tags):
+        raise bad("unknown yai. tag")  # yai.on_behalf_of included: it was replaced by act (D-067)
     task["tags"] = tags
     return task, warnings
 
 
 def file_input_allowed(owner: tuple, principal: Principal, task: dict[str, Any]) -> bool:
-    """file:// inputs only from outputs of the same owner. For tasks a service submits on someone's
-    behalf, only outputs with the same yai.on_behalf_of and the same yai.run_id (C-25)."""
-    o_iss, o_sub, o_obo, o_run = owner
+    """file:// inputs only from outputs of the same owner. When a service acts for the owner
+    (`act` in the AT), only outputs the same service produced for the same yai.run_id (C-25)."""
+    o_iss, o_sub, o_actor, o_run = owner
     if (o_iss, o_sub) != principal.owner:
         return False
-    tags = task.get("tags") or {}
-    if principal.kind == "service":
-        return o_obo == tags.get("yai.on_behalf_of") and o_run == tags.get("yai.run_id")
-    return True
+    if principal.actor is not None:
+        tags = task.get("tags") or {}
+        return o_actor == principal.actor_ref and o_run == tags.get("yai.run_id")
+    return o_actor is None
 
 
 def public_task(task: dict[str, Any]) -> dict[str, Any]:

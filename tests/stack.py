@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -26,13 +27,16 @@ USERS = {
 # Test secret (AAI requires 32+ characters, D-055 (4))
 TEST_CLIENT_SECRET = "test-client-secret-0123456789abcdef"
 WES_CLIENT_SECRET = "wes-client-secret-0123456789abcdefgh"
+TES_CLIENT_SECRET = "tes-client-secret-0123456789abcdefgh"
 CLIENTS = {
     "yai-test-client": {"secret": TEST_CLIENT_SECRET},
     "yai-wes": {
         "secret": WES_CLIENT_SECRET,
         "audiences": ["yai-tes", "yai-drs"],
-        "scopes": ["tes.submit", "tes.read", "tes.cancel", "tes.delegate"],
+        # with the PSAT scopes the exchanged token lets the TES fetch the user's Passport (D-069)
+        "scopes": ["tes.submit", "tes.read", "tes.cancel", "openid", "ga4gh_passport_v1"],
     },
+    "yai-tes": {"secret": TES_CLIENT_SECRET},  # client authentication for the exchange (D-069)
 }
 EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange"
 
@@ -104,13 +108,19 @@ class Creds:
     def __init__(self, aai: Server):
         self.aai = aai
 
-    def login(self, user: str, aud: list[str]) -> dict[str, Any]:
-        r = httpx.post(self.aai.url + "/test/login", json={"username": user, "aud": aud})
+    def login(self, user: str, aud: list[str], passport_aud: Sequence[str] = ()) -> dict[str, Any]:
+        body = {"username": user, "aud": aud, "passport_aud": list(passport_aud)}
+        r = httpx.post(self.aai.url + "/test/login", json=body)
         r.raise_for_status()
         return r.json()
 
     def at(self, user: str, aud: str) -> str:
         return self.login(user, [aud])["access_tokens"][aud]
+
+    def psat_for(self, user: str, aud: str) -> str:
+        """AT for `aud` that also carries the PSAT scopes: the user lets that service fetch their
+        Passport (D-069)."""
+        return self.login(user, [aud], [aud])["access_tokens"][aud]
 
     def passport(self, user: str) -> str:
         psat = self.login(user, [])["passport_scoped_access_token"]
@@ -125,6 +135,20 @@ class Creds:
             },
             headers={"Authorization": f"Basic {basic}"},
         )
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+    def delegated_at(self, user: str, aud: str = "yai-tes") -> str:
+        """AT for `aud` with sub=user and act.sub=yai-wes: the user's AT issued to the WES,
+        exchanged by the WES (RFC 8693, D-067)."""
+        subject = self.at(user, "yai-wes")
+        r = httpx.post(
+            self.aai.url + "/token",
+            data={"grant_type": EXCHANGE, "subject_token": subject, "audience": aud,
+                  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                  "requested_token_type": "urn:ietf:params:oauth:token-type:access_token"},
+            auth=("yai-wes", WES_CLIENT_SECRET),
+        )  # fmt: skip
         r.raise_for_status()
         return r.json()["access_token"]
 

@@ -7,6 +7,7 @@ Transitions are docs/data/tes-states.yaml copied into code (D-006).
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -18,6 +19,7 @@ from yai.common.fetch import needs_redact, redact
 
 SCHEMA = Path(__file__).resolve().parent.parent.parent / "schema" / "tes.sql"
 
+log = logging.getLogger("yai.tes")
 TERMINAL = frozenset({"COMPLETE", "EXECUTOR_ERROR", "SYSTEM_ERROR", "CANCELED"})
 # transitions of docs/data/tes-states.yaml (from -> allowed targets)
 TRANSITIONS: dict[str, frozenset[str]] = {
@@ -29,7 +31,11 @@ TRANSITIONS: dict[str, frozenset[str]] = {
 
 
 # columns added later (also added to old DB files)
-_ADDED = {"executions": {"exit_code": "INTEGER", "error": "TEXT"}}
+_ADDED = {
+    "executions": {"exit_code": "INTEGER", "error": "TEXT"},
+    "tasks": {"actor": "TEXT"},  # D-067 (replaces on_behalf_of, which stays unused in old files)
+    "output_files": {"actor": "TEXT"},
+}
 
 
 class Execution(NamedTuple):
@@ -64,19 +70,74 @@ def scrub_finished(task: dict[str, Any]) -> bool:
 
 
 def _scrub_ended(db: sqlite3.Connection) -> None:
-    """Apply scrub_finished also to tasks finished by an older version (at startup, D-043)."""
+    """Apply scrub_finished to tasks finished by an older version, and redact_inputs to tasks an
+    older version left RUNNING with their signed URLs (at startup, D-043, D-068)."""
     marks = ",".join("?" * len(TERMINAL))
     db.execute("BEGIN IMMEDIATE")
     rows = db.execute(
-        f"SELECT id, task_json FROM tasks WHERE state IN ({marks})"  # noqa: S608
+        f"SELECT id, state, task_json FROM tasks WHERE state IN ({marks}, 'RUNNING')"  # noqa: S608
         " AND (task_json LIKE '%\"content\"%' OR task_json LIKE '%?%' OR task_json LIKE '%@%')",
         tuple(TERMINAL),
     ).fetchall()
-    for task_id, raw in rows:
+    for task_id, state, raw in rows:
         task = json.loads(raw)
-        if scrub_finished(task):
+        changed = scrub_finished(task) if state in TERMINAL else redact_inputs(task)
+        if changed:
             db.execute("UPDATE tasks SET task_json=? WHERE id=?", (json.dumps(task), task_id))
     db.execute("COMMIT")
+
+
+def _migrate_on_behalf_of(db: sqlite3.Connection) -> None:
+    """Files written before D-067 marked delegation with a column on_behalf_of (`<iss>|<sub>` of
+    the user; the row's owner was the submitting service) and a tag yai.on_behalf_of. Rewrite
+    those rows into the current shape: owner = the user, actor = the service. The old column
+    could only be set by a service holding the former tes.delegate scope, so the trust placed in
+    it is the same as in `act` today. The tag is dropped (anyone could have sent it). Done once:
+    on_behalf_of is cleared afterwards."""
+    for table in ("tasks", "output_files"):
+        cols = {r[1] for r in db.execute(f"PRAGMA table_info({table})")}
+        if "on_behalf_of" not in cols:
+            continue
+        db.execute("BEGIN IMMEDIATE")
+        key = "id" if table == "tasks" else "rowid"
+        rows = db.execute(
+            f"SELECT {key}, owner_iss, owner_sub, on_behalf_of"  # noqa: S608
+            f"{', task_json' if table == 'tasks' else ''} FROM {table}"
+            " WHERE on_behalf_of IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            rid, iss, sub, obo = row[:4]
+            user_iss, sep, user_sub = str(obo).rpartition("|")
+            if not sep or not user_iss or not user_sub:
+                log.warning("%s %s: on_behalf_of %r is not <iss>|<sub>; left as is",
+                            table, rid, obo)  # fmt: skip
+                continue
+            actor = f"{iss}|{sub}"
+            if table == "tasks":
+                task = json.loads(row[4])
+                (task.get("tags") or {}).pop("yai.on_behalf_of", None)
+                sql = ("UPDATE tasks SET owner_iss=?, owner_sub=?, actor=?, on_behalf_of=NULL,"
+                       " task_json=?{} WHERE id=?")  # fmt: skip
+                args = (user_iss, user_sub, actor, json.dumps(task), rid)
+                try:
+                    db.execute(sql.format(""), args)
+                except sqlite3.IntegrityError:
+                    # the user already has a task with this nonce (tasks_nonce). The nonce only
+                    # marks resends, so the old row loses it; the ownership is still rewritten,
+                    # consistently with its output rows
+                    db.execute(sql.format(", submit_nonce=NULL"), args)
+                    log.warning("tasks %s: rewritten without its nonce (it collided with a task "
+                                "of %s)", rid, user_sub)  # fmt: skip
+            else:
+                db.execute(
+                    "UPDATE output_files SET owner_iss=?, owner_sub=?, actor=?, on_behalf_of=NULL"
+                    " WHERE rowid=?",
+                    (user_iss, user_sub, actor, rid),
+                )
+        if rows:
+            log.info("%s: %d rows of an older version rewritten (on_behalf_of -> owner and actor)",
+                     table, len(rows))  # fmt: skip
+        db.execute("COMMIT")
 
 
 def _widen_transfer_key(db: sqlite3.Connection) -> None:
@@ -102,7 +163,7 @@ class TaskRow:
     seq: int
     id: str
     owner: tuple[str, str]
-    on_behalf_of: str | None
+    actor: str | None  # <iss>|<sub> of the service that submitted for the owner, else None
     run_id: str | None
     state: str
     name: str | None
@@ -128,6 +189,7 @@ class TesDb:
                     if col not in have:
                         db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             _widen_transfer_key(db)
+            _migrate_on_behalf_of(db)
             _scrub_ended(db)
 
     @contextmanager
@@ -144,16 +206,26 @@ class TesDb:
     @staticmethod
     def _row(r: tuple) -> TaskRow:
         return TaskRow(
-            seq=r[0], id=r[1], owner=(r[2], r[3]), on_behalf_of=r[4], run_id=r[5],
+            seq=r[0], id=r[1], owner=(r[2], r[3]), actor=r[4], run_id=r[5],
             state=r[6], name=r[7], created_at=r[8], task=json.loads(r[9]), version=r[10],
         )  # fmt: skip
 
     _COLS = (
-        "seq, id, owner_iss, owner_sub, on_behalf_of, run_id, state, name, created_at,"
-        " task_json, version"
+        "seq, id, owner_iss, owner_sub, actor, run_id, state, name, created_at, task_json, version"
     )
 
     # --- create / read ---
+    def task_by_nonce(self, owner: tuple[str, str], nonce: str) -> str | None:
+        """The owner's earlier task with this yai.submit_nonce (D-071), if any. create() checks
+        again inside its transaction; this lets the API answer a resend before doing any work
+        for it (such as resolving drs:// inputs, D-069)."""
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT id FROM tasks WHERE owner_iss=? AND owner_sub=? AND submit_nonce=?",
+                (owner[0], owner[1], nonce),
+            ).fetchone()
+        return row[0] if row else None
+
     def create(
         self,
         task_id: str,
@@ -161,16 +233,16 @@ class TesDb:
         task: dict[str, Any],
         now: int,
         *,
-        on_behalf_of: str | None,
+        actor: str | None,
         run_id: str | None,
         nonce: str | None,
         max_active: int = 0,
     ) -> str:
-        """Create and return the id. If the principal and nonce exist, the earlier id.
+        """Create and return the id. If the owner and nonce exist, the earlier id.
 
         If max_active is positive, raise TaskLimit when the user already has that many unfinished
-        tasks (N-1). A user is "owner + on_behalf_of": tasks submitted directly (no on_behalf_of)
-        and tasks a service submitted on someone's behalf (per on_behalf_of) count separately. The
+        tasks (N-1). A user is "owner + actor": tasks submitted directly (no actor) and tasks a
+        service submitted on the owner's behalf (per actor, D-067) count separately. The
         count is in the same write (BEGIN IMMEDIATE) as the insert, so concurrent submits cannot
         exceed it. A resend (same nonce) is not counted and returns the earlier id
         (same shape as the WES run limit, D-044)."""
@@ -188,19 +260,19 @@ class TesDb:
                 marks = ",".join("?" * len(TERMINAL))
                 sql = (
                     f"SELECT COUNT(*) FROM tasks WHERE state NOT IN ({marks})"  # noqa: S608
-                    " AND owner_iss=? AND owner_sub=? AND on_behalf_of IS ?"
+                    " AND owner_iss=? AND owner_sub=? AND actor IS ?"
                 )
                 (active,) = db.execute(
-                    sql, (*sorted(TERMINAL), owner[0], owner[1], on_behalf_of)
+                    sql, (*sorted(TERMINAL), owner[0], owner[1], actor)
                 ).fetchone()
                 if active >= max_active:
                     db.execute("ROLLBACK")
                     raise TaskLimit(max_active)
             db.execute(
-                "INSERT INTO tasks (id, owner_iss, owner_sub, on_behalf_of, run_id,"
+                "INSERT INTO tasks (id, owner_iss, owner_sub, actor, run_id,"
                 " submit_nonce, state, name, created_at, task_json)"
                 " VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (task_id, owner[0], owner[1], on_behalf_of, run_id, nonce, "QUEUED",
+                (task_id, owner[0], owner[1], actor, run_id, nonce, "QUEUED",
                  task.get("name"), now, json.dumps(task)),
             )  # fmt: skip
             db.execute("COMMIT")
@@ -223,16 +295,24 @@ class TesDb:
         after_seq: int | None,
         name_prefix: str | None,
         state: str | None,
+        as_actor: str | None = None,
+        actor: str | None = None,
     ) -> list[TaskRow]:
-        """Visible tasks in descending seq. owner=None means all (all visible; provisional)."""
+        """Visible tasks in descending seq: the owner's (with an exchanged token, actor =
+        `<iss>|<act.sub>`, only those that service submitted for them), plus (for a service,
+        as_actor = `<iss>|<sub>`) the tasks it submitted for others (D-067). owner=None means
+        all (all visible; provisional)."""
         where = ["seq <= ?"]
         args: list[Any] = [snapshot_seq]
         if after_seq is not None:
             where.append("seq < ?")
             args.append(after_seq)
-        if owner is not None:
-            where.append("((owner_iss=? AND owner_sub=?) OR on_behalf_of=?)")
-            args += [owner[0], owner[1], f"{owner[0]}|{owner[1]}"]
+        if owner is not None and actor is not None:
+            where.append("((owner_iss=? AND owner_sub=? AND actor=?) OR actor=?)")
+            args += [owner[0], owner[1], actor, as_actor or ""]
+        elif owner is not None:
+            where.append("((owner_iss=? AND owner_sub=?) OR actor=?)")
+            args += [owner[0], owner[1], as_actor or ""]
         if name_prefix:
             where.append("substr(name, 1, ?) = ?")
             args += [len(name_prefix), name_prefix]
@@ -252,11 +332,14 @@ class TesDb:
         """Set to `to` only if the current state is frm. True if won.
 
         On a final state, the same write removes the query part of input URLs and inputs[].content
-        (no window where they remain after finishing, even on crash; D-043)."""
+        (no window where they remain after finishing, even on crash; D-043). On INITIALIZING ->
+        RUNNING (all inputs fetched; a restart from RUNNING does not fetch again) the same write
+        already removes the query part of input URLs: the signed URL, a bearer credential, is not
+        kept a moment longer than the fetch needs it (D-068)."""
         if to not in TRANSITIONS.get(frm, frozenset()):
             raise ValueError(f"transition {frm} -> {to} is not in tes-states.yaml")
         with self.connect() as db:
-            if to not in TERMINAL:
+            if to not in TERMINAL and not (frm == "INITIALIZING" and to == "RUNNING"):
                 cur = db.execute(
                     "UPDATE tasks SET state=?, version=version+1 WHERE id=? AND state=?",
                     (to, task_id, frm),
@@ -270,7 +353,10 @@ class TesDb:
                 db.execute("ROLLBACK")
                 return False
             task = json.loads(row[0])
-            scrub_finished(task)
+            if to in TERMINAL:
+                scrub_finished(task)
+            else:
+                redact_inputs(task)
             db.execute(
                 "UPDATE tasks SET state=?, task_json=?, version=version+1 WHERE id=?",
                 (to, json.dumps(task), task_id),
@@ -429,8 +515,8 @@ class TesDb:
             db.execute("BEGIN IMMEDIATE")
             db.execute(
                 "INSERT INTO output_files (task_id, url, path, size_bytes, owner_iss, owner_sub,"
-                " on_behalf_of, run_id) VALUES (?,?,?,?,?,?,?,?)",
-                (row.id, url, path, size, row.owner[0], row.owner[1], row.on_behalf_of,
+                " actor, run_id) VALUES (?,?,?,?,?,?,?,?)",
+                (row.id, url, path, size, row.owner[0], row.owner[1], row.actor,
                  row.run_id),
             )  # fmt: skip
             db.execute(
@@ -442,7 +528,7 @@ class TesDb:
     def output_owner(self, url: str) -> tuple[str, str, str | None, str | None] | None:
         with self.connect() as db:
             r = db.execute(
-                "SELECT owner_iss, owner_sub, on_behalf_of, run_id FROM output_files WHERE url=?",
+                "SELECT owner_iss, owner_sub, actor, run_id FROM output_files WHERE url=?",
                 (url,),
             ).fetchone()
         return tuple(r) if r else None  # type: ignore[return-value]

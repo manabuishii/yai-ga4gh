@@ -1,7 +1,7 @@
 # 操作ごとの認可の表(4 つの役のうち「資源と操作ごとに許すかを決める」の中身。docs/design/aai.md 5 節)
 # credential: 受ける資格情報の種類(aai.md 3 節の表の名前)。none=要らない
 # scope: AT の scope に要るもの / owner: 資源の持ち主との関係
-#   self=作った本人 / on_behalf_of=yai.on_behalf_of の本人 / service=作ったサービス本人
+#   self=持ち主本人(AT の sub。サービスが代理で出したものも持ち主は利用者、D-067) / actor=代理で出したサービス本人(AT の act.sub、自分の AT で) / service=作ったサービス本人
 # not_visible: 見えないときの応答(D-013)
 # 設計の正(D-006)。実装は実行時に読むかコードに写す。表に無い操作は拒否(403)
 tokens:
@@ -33,10 +33,10 @@ drs:
     どれかの検査が失敗したら(壊れている・信頼しない)要求全体を 401(PP-CH-01)
 tes:
   GetServiceInfo:   {credential: [none]}
-  CreateTask:       {credential: [at_user, at_service], scope: [tes.submit], note: "yai. で始まる tags は at_service かつ scope tes.delegate のときだけ"}
-  ListTasks:        {credential: [at_user, at_service], scope: [tes.read], owner: [self, on_behalf_of], note: 見えるものだけを返す}
-  GetTask:          {credential: [at_user, at_service], scope: [tes.read], owner: [self, on_behalf_of], not_visible: 404}
-  CancelTask:       {credential: [at_user, at_service], scope: [tes.cancel], owner: [self], not_visible: 404, visible_but_not_owner: 403}
+  CreateTask:       {credential: [at_user, at_service], scope: [tes.submit], note: "持ち主は AT の sub、代理は act.sub(D-067)。yai. の tags は yai.run_id・yai.submit_nonce だけで、誰でも付けられる(D-071)。yai.on_behalf_of は 400。drs:// の入力は drs.enabled のときだけ、利用者の PSAT で(D-069)"}
+  ListTasks:        {credential: [at_user, at_service], scope: [tes.read], owner: [self, actor], note: "見えるものだけを返す。self は自分の AT なら自分のタスク全部、交換した AT(act 付き)なら同じ(持ち主, 代理)の組だけ(D-067)"}
+  GetTask:          {credential: [at_user, at_service], scope: [tes.read], owner: [self, actor], not_visible: 404, note: "self の意味は ListTasks と同じ"}
+  CancelTask:       {credential: [at_user, at_service], scope: [tes.cancel], owner: [self, actor], not_visible: 404, visible_but_not_owner: 403, note: "self は「同じ持ち主+同じ代理」の組(利用者本人は代理で出されたものを取り消せない)"}
 wes:
   GetServiceInfo:   {credential: [none]}
   ListRuns:         {credential: [at_user], scope: [wes.read], owner: [self]}

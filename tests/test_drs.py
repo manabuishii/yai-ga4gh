@@ -412,6 +412,33 @@ def test_DRS_BULK_02(env):
     assert opts.json()["summary"] == {"requested": 2, "resolved": 1, "unresolved": 1}
 
 
+def test_INT_DRS_REQUIRED_VISAS(env, tmp_path):
+    """D-072 (a yai extension): the Authorizations of a dataset object name the Visa it needs, in
+    OPTIONS and in access_methods[].authorizations. Not for public or bearer objects; a config
+    switch turns it off."""
+    need = [{"type": "ControlledAccessGrants", "value": DS1}]
+
+    def options(key: str) -> dict:
+        return httpx.options(env.url + f"/objects/{env.ids[key]}").json()
+
+    assert options("ds1")["yai_required_visas"] == need
+    obj = post(env, f"/objects/{env.ids['ds1']}", {"passports": [env.alice_pp]}).json()
+    assert obj["access_methods"][0]["authorizations"]["yai_required_visas"] == need
+    for key in ("pub", "bear"):
+        assert "yai_required_visas" not in options(key)
+    port = free_port()
+    cfg = drs_config(env.aai, tmp_path, port, authorizations={"expose_dataset": False},
+                     url_secret_file=str(tmp_path / "s"))  # fmt: skip
+    cfg["data_dir"] = env.cfg["data_dir"]
+    drs = Server("drs", cfg, tmp_path / "drs-hidden", port=port).start()
+    try:
+        opts = httpx.options(drs.url + f"/objects/{env.ids['ds1']}").json()
+        assert opts["supported_types"] == ["PassportAuth"]
+        assert "yai_required_visas" not in opts
+    finally:
+        drs.stop()
+
+
 # --- Expiry (test clock) ---
 
 

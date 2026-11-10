@@ -6,6 +6,8 @@ max_bulk_request_length: 100
 signed_url_ttl_seconds: 3600            # D-019
 url_secret_file: var/drs/url-secret     # created at startup if missing
 test_endpoints: false                   # true enables /yai/test/clock (test clock; local tests only, D-054)
+authorizations:
+  expose_dataset: true                  # yai_required_visas in Authorizations (dataset policy only, D-072; a yai extension)
 auth:
   mode: aai                             # aai | anonymous (provisional: everything public)
   issuer: http://127.0.0.1:8401/

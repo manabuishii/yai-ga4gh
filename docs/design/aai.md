@@ -34,7 +34,7 @@
 
 | 検査 | yai AT(Bearer) | Passport(DRS の本文 `passports`、WES の multipart `yai_passports`) | Visa Document Token(Passport の中) | Visa Access Token | PSAT |
 | --- | --- | --- | --- | --- | --- |
-| 受けるか | 受ける | 受ける | 受ける | **受けない**(無視、G-AAI-02) | **受けない**(401、G-AAI-01) |
+| 受けるか | 受ける | 受ける | 受ける | **受けない**(無視、G-AAI-02) | **受けない**(401、G-AAI-01)。例外: `drs.enabled` の TES は自分あて(`aud=yai-tes`)のものを AT として受け、Passport に替える(D-069) |
 | 種類の見分け(Visa) | — | — | **ヘッダーに `jku` が有れば Visa Document Token**。`scope` を持ってもよい(`openid` を含めば拒否、AAI-FMT-05) | **`jku` が無いもの**は Visa Access Token とみなして無視 | — |
 | `typ` | `at+jwt` | `vnd.ga4gh.passport+jwt`(AAI-FMT-01) | 無い・`vnd.ga4gh.visa+jwt`・`JWT` のどれでも受ける。ほかの値は無視(G-AAI-05、Passport の `typ` の節) | — | — |
 | `alg` | `ES256`・`RS256` だけ。`none`・HS 系は拒否(AAI-FMT-03) | 同じ | 同じ | — | — |
@@ -92,9 +92,11 @@ max_visas_per_passport: 100   # 超えたら Passport ごと拒否(D-058 仮)
 | --- | --- | --- |
 | `GET /.well-known/openid-configuration` | `issuer`・`jwks_uri`・`token_endpoint` | OIDC Discovery(Broker の MUST の一部) |
 | `GET /.well-known/jwks.json` | Broker の公開鍵(ES256) | |
-| `POST /test/login` | 試験用。利用者名 → PSAT と AT(`aud` を指定)。**試験の設定でだけ有効**。compose で開くのはこの口だけ(D-054) | 独自 |
+| `POST /test/login` | 試験用。利用者名 → PSAT と AT(`aud` を指定。`passport_aud` に挙げたサービスあての AT は PSAT の scope も持つ: その サービスに Passport を取らせる同意の代わり、D-069)。**試験の設定でだけ有効**。compose で `test_endpoints` が開くのはこの口と `/test/revoke`(D-054、D-070) | 独自 |
 | `PUT /test/users/{name}/visas` | 試験用。Visa 発行役の利用者表の Visa を差し替える。**`test_visa_endpoint` のときだけ**(local の試験だけ、D-054) | 独自 |
-| `POST /token`(`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`) | PSAT → Passport(AAI-ISS-01 の決まりどおり) | AAI 1.2・RFC 8693 |
+| `POST /test/revoke` | 試験用。利用者に出した PSAT・AT をそれ以後の交換で断る(出し済みの Passport・交換した AT・署名付き URL は期限まで効く)。新しい `/test/login` で解ける。`test_endpoints` のときだけ(D-070) | 独自(試験用の形。本物の取り消しは IdP の口で、ログインで解けるものではない、G-AAI-09) |
+| `POST /token`(`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`、`requested_token_type=passport`) | PSAT → Passport(AAI-ISS-01 の決まりどおり: client 認証、subject は有効な PSAT)。**どの client がどの PSAT を交換できるかは仕様が決めていないので、Broker の方針として、頼んだ client のサービス名が PSAT の `aud` に入っているときだけ**(G-AAI-11、D-069)。`aud` の無い PSAT は断る。サービスが利用者の代わりに持つ PSAT(`act` 付き)も同じ(`aud` のサービスだけが替えられる)。交換のたびに利用者表と取り消しを確かめる(D-070) | AAI 1.2・RFC 8693 |
+| `POST /token`(`grant_type=…token-exchange`、`requested_token_type=access_token`) | 利用者の AT(呼んだ client あて)→ 次のサービスあての AT、`act` に client(D-067、yai の拡張)。scope は client の `scopes`(`openid ga4gh_passport_v1` を含めば PSAT になる、D-069)。期限は `ttl.delegated_access_token`。`clients.<id>.service`(既定は client ID)が subject の `aud` に要る。`act.sub` は client ID(サービスの AT は `client_id == sub` で見分けるので、`clients.<id>.sub` を client ID と違えた設定は起動で断る、D-055 の形) | RFC 8693(AAI 1.2 には無い) |
 | `POST /token`(`grant_type=client_credentials`) | サービスの AT | RFC 6749 |
 | `GET /visa/jwks.json` | Visa Issuer の公開鍵(`jku` の先) | |
 

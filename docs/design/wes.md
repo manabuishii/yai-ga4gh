@@ -25,7 +25,7 @@
   - `steps` は対応表か id 付きの配列。**書いた順に 1 段ずつ**動かす(段 1 つ = TES タスク 1 つ、`TaskLog.id=<run_id>.<n>`、`name`=段の名前)
   - 各段の `run` は**埋め込みの CommandLineTool だけ**(上の部分集合。`cwlVersion` は省いてよい)。別の文書の参照・子の `Workflow`・`scatter`・`when` は 400
   - `in` は `{ツールの入力: 出どころ}`(か `{source: …}`)。出どころはワークフローの入力の名前か、**それより前の段**の `<段>/<出力>`(前を向く参照・循環は 400)。型が合わなければ 400。出どころの無いツールの入力は `default` が要る。`out` はツールの出力の名前の配列
-  - 段の間の受け渡し: 前の段の TES の出力の `file://` の URL を、次の段の `tesInput.url` にそのまま入れる(同じ `yai.run_id`・`yai.on_behalf_of` なので C-25 で通る)。TES の出力の置き場は `wes/<run_id>/<n>/<出力>/<glob>`(段の番号を入れて、同じ出力の名前でもぶつからない)
+  - 段の間の受け渡し: 前の段の TES の出力の `file://` の URL を、次の段の `tesInput.url` にそのまま入れる(同じ持ち主・同じ代理(`act`)・同じ `yai.run_id` なので C-25 で通る、D-067)。TES の出力の置き場は `wes/<run_id>/<n>/<出力>/<glob>`(段の番号を入れて、同じ出力の名前でもぶつからない)
   - 受け付けでは、前の段の出力の代わりに印(`yai-step:<n>/<glob>`)を入れて全段の argv が組めることまで確かめる。`drs://` は**その段を出す直前**に解決する。再起動で Passport が消えたときに SYSTEM_ERROR になるのは、**これから出す段に `drs://` の入力があるとき**だけ(E2E-09 の読み)
   - どれかの段が終わりの状態(COMPLETE 以外)になったら、そこで run を終える(次の段を出さない)。取り消しは出した全段に CancelTask
 - **確かめ方**: 同じ例(`tests/cases/cwl/`)を cwltool でも動かし、argv と出力の中身を比べる(CWL-PARITY)。「CWL に適合」とは言わず、service-info の tags に部分集合と書く
@@ -52,14 +52,14 @@
 | すべての操作 | AT(`aud=yai-wes`) | 利用者 | `permissions.yaml`。他人の run は 404 | — |
 | RunWorkflow の Passport | Passport の形と期限だけ(早めに失敗させるため)。**判定は DRS がする** | — | — | 預かる |
 | DRS の解決 | — | — | — | Passport を DRS の本文 `passports` に入れる(利用者の代わり)。**送ってよい先の検査**(`system.md` 4 節 ⑤⑥、DRS-AUTH-07) |
-| TES へ出す・見張る・取り消す | — | — | — | WES のサービスの AT(client_credentials、scope は `tes.submit tes.read tes.cancel tes.delegate` の 4 つ)+tags `yai.run_id`・`yai.on_behalf_of`・`yai.submit_nonce` |
+| TES へ出す・見張る・取り消す | — | — | — | 利用者の AT を RFC 8693 で TES あてに交換した AT(`sub`=利用者、`act.sub`=WES、scope は `tes.submit tes.read tes.cancel`、D-067)+tags `yai.run_id`・`yai.submit_nonce`。交換した AT はメモリだけ(Passport と同じ入れ物)。再起動で失った後の見張り・取り消しは自分のサービスの AT(client_credentials)、これから出す段は `SYSTEM_ERROR` |
 
 ## 4. 状態
 
 - 移り方の表: `docs/data/wes-states.yaml`。TES の状態からの写し方: `docs/data/state-map-tes-to-wes.yaml`
 - エンジンの進め方(最小版):
   1. QUEUED → INITIALIZING: 受け付けのときに保存した文書と入力を読む(文書の誤りは受け付けで 400 になっているので、ここでは起きない)
-  2. 入力の `drs://` を解決する(`/access` → 署名付き URL)。**TES に出す直前に解決する**(署名付き URL の期限を短く保つため、`system.md` 5 節)
+  2. 入力の `drs://` を解決する(`/access` → 署名付き URL)。**TES に出す直前に解決する**(署名付き URL の期限を短く保つため、`system.md` 5 節)。設定 `resolver.resolve_in_wes: false` なら解かずに `drs://` のまま TES に渡す(`drs.enabled` の yai-tes が、⑩ の PSAT で自分で解く。D-069。このとき WES は Passport を要らない)。前提は 3 つそろって: TES の `drs.enabled`、Broker の WES の client の `scopes` に `openid ga4gh_passport_v1`(⑩ が PSAT になる)、`tes.delegate: true`(サービスの AT には利用者がいないので TES が 403)
   3. **TES に出す前に意図を保存する**: `steps` に `phase=submitting` と、その場で作った `submit_nonce` を書き、CreateTask の tags に `yai.submit_nonce` を付ける。成功したら `tes_task_id` を保存して `phase=submitted`。応答が分からないまま失敗したら、出し直す前に ListTasks(**`tag_key=yai.submit_nonce` と `tag_value=<nonce>` の両方**。値を省くと別の run のタスクにも一致する。全ページを辿る)で探す。見つからなくても、最初の要求がまだ処理中かもしれないので、**60 秒の間 10 秒ごとに探し直してから**出し直す。yai-tes は同じ主体・同じ `yai.submit_nonce` の CreateTask を 2 度目は新しく作らず、前の `id` を返す(一意の制約)ので二重にならない。**外の TES ではこの保証は無い**(TES 1.1 に冪等の決まりが無い)ので、探し直しの範囲でだけ防ぐ
   4. RUNNING。2 秒ごとに GetTask(`view=FULL`)で見張る(仮)
   5. タスクが COMPLETE → `outputs` に CWL の出力の形(`location` は TES の出力の URL)を書いて COMPLETE

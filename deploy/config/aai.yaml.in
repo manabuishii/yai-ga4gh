@@ -1,9 +1,9 @@
 # yai-aai (combined tests). setup.sh replaces @...@ with secrets and writes local/config/aai.yaml
 issuer: https://aai.yai.test/
 keys_dir: /yai/var/aai/keys
-test_endpoints: true            # /test/login only (used by the compose e2e and the interop clients, D-054)
+test_endpoints: true            # /test/login and /test/revoke (used by the compose e2e and the interop clients, D-054, D-070)
 passport_aud: [yai-drs]
-ttl: {access_token: 900, psat: 900, passport: 7200, visa: 7200}
+ttl: {access_token: 900, psat: 900, passport: 7200, visa: 7200, delegated_access_token: 7200}
 users:
   alice:   {scopes: [wes.run, wes.read, wes.cancel, tes.submit, tes.read, tes.cancel, drs.read, drs.access],
             visas: [{value: "https://yai.test/datasets/ds1"}]}
@@ -14,4 +14,5 @@ users:
 clients:
   yai-test-client: {secret: "@TEST_CLIENT_SECRET@"}
   yai-wes: {secret: "@WES_CLIENT_SECRET@", audiences: [yai-tes, yai-drs],
-            scopes: [tes.submit, tes.read, tes.cancel, tes.delegate]}
+            scopes: [tes.submit, tes.read, tes.cancel, openid, ga4gh_passport_v1]}   # D-067, D-069
+  yai-tes: {secret: "@TES_CLIENT_SECRET@"}   # Passport exchange for drs:// inputs (D-069)

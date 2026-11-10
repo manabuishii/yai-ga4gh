@@ -1,5 +1,8 @@
 """DRS resolver ((a) of system.md sections 3 and 4, D-007). Turns drs:// into signed URLs.
 
+Used by the WES (its resolver part) and, when `drs.enabled` is set, by the TES for drs://
+inputs it resolves itself (D-069).
+
 - Hostname form drs://<host>/<id> and compact form drs://<prefix>:<accession> (local table,
   G-DRS-02)
 - Only for unit tests, a "hostname -> real URL" override table (G-DRS-01)
@@ -30,7 +33,12 @@ MAX_RESPONSE = 1024 * 1024  # limit for DRS responses (DrsObject, AccessURL)
 
 
 class ResolveError(Exception):
-    pass
+    """status: the DRS's HTTP status when it answered (401/403: refused), 503 when it could not be
+    reached in time, None for everything else (shape, policy of this resolver)."""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass
@@ -78,28 +86,42 @@ class DrsResolver:
                         if len(body) > MAX_RESPONSE:
                             raise ResolveError("DRS response too large")
                     if time.monotonic() > deadline:
-                        raise ResolveError("DRS too slow")
+                        raise ResolveError("DRS too slow", 503)
                     return r.status_code, body
             except FetchError as exc:
                 raise ResolveError(f"DRS: {exc.reason}") from exc
             except httpx.TransportError as exc:
-                raise ResolveError(f"DRS unreachable ({type(exc).__name__})") from exc
+                raise ResolveError(f"DRS unreachable ({type(exc).__name__})", 503) from exc
 
         opts = self._json(send("OPTIONS", f"{api}/objects/{oid}"), allow_204=True)
         meta_types = (opts or {}).get("supported_types") or ["None"]
+        if not isinstance(meta_types, list):
+            raise ResolveError("DRS answered supported_types of an unexpected shape")
         use_passport = "PassportAuth" in meta_types
         if use_passport:
             body = {"passports": self._passports_for(host, opts or {}, passports)}
             obj = self._json(send("POST", f"{api}/objects/{oid}", json=body))
         else:
             obj = self._json(send("GET", f"{api}/objects/{oid}"))
-        for method in obj.get("access_methods") or []:
+        methods = obj.get("access_methods") or []
+        if not isinstance(methods, list) or not all(isinstance(m, dict) for m in methods):
+            raise ResolveError("DRS answered access_methods of an unexpected shape")
+        for method in methods:
             if method.get("access_url"):
+                if not isinstance(method["access_url"], dict):
+                    raise ResolveError("DRS answered an access_url of an unexpected shape")
                 return self._url_only(method["access_url"])
             if method.get("access_id"):
+                if not isinstance(method["access_id"], str):
+                    raise ResolveError("DRS answered an access_id of an unexpected shape")
                 aid = quote(method["access_id"], safe="")
                 auth = method.get("authorizations") or {}
-                if "PassportAuth" in (auth.get("supported_types") or []):
+                if not isinstance(auth, dict):
+                    raise ResolveError("DRS answered authorizations of an unexpected shape")
+                types = auth.get("supported_types") or []
+                if not isinstance(types, list):
+                    raise ResolveError("DRS answered supported_types of an unexpected shape")
+                if "PassportAuth" in types:
                     body = {"passports": self._passports_for(host, auth, passports)}
                     r = send("POST", f"{api}/objects/{oid}/access/{aid}", json=body)
                 else:
@@ -112,7 +134,10 @@ class DrsResolver:
             raise ResolveError(f"not allowed to send passports to {host}")
         if not passports:
             raise ResolveError("a passport is required for this input")
-        issuers = set(auth.get("passport_auth_issuers") or [])
+        listed = auth.get("passport_auth_issuers") or []
+        if not isinstance(listed, list) or not all(isinstance(x, str) for x in listed):
+            raise ResolveError("DRS answered passport_auth_issuers of an unexpected shape")
+        issuers = set(listed)
         chosen = [p for p in passports if issuers & visa_issuers(p)]
         if not chosen:
             raise ResolveError("no passport has a visa from passport_auth_issuers")
@@ -131,11 +156,11 @@ class DrsResolver:
     def _json(resp: tuple[int, bytes], allow_204: bool = False) -> Any:
         status, body = resp
         if 300 <= status < 400:
-            raise ResolveError("redirect not followed")
+            raise ResolveError("redirect not followed", status)
         if allow_204 and status in (204, 405):
             return None
         if status != 200:
-            raise ResolveError(f"DRS answered {status}")
+            raise ResolveError(f"DRS answered {status}", status)
         try:
             value = json.loads(body)
         except ValueError as exc:

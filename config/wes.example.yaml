@@ -7,12 +7,17 @@ auth:
   jwks_uri: http://127.0.0.1:8401/.well-known/jwks.json
   audience: yai-wes
   insecure_http_hosts: ["127.0.0.1:8401"]
-tes:                                    # WES calls TES with its own service identity (D-010)
+tes:                                    # WES calls TES for the user with an exchanged AT (act = this WES, D-067)
   url: http://127.0.0.1:8403/ga4gh/tes/v1
   token_url: http://127.0.0.1:8401/token
   client_id: yai-wes
   client_secret_file: var/wes/client-secret   # not in git
+  audience: yai-tes                     # audience of the tokens for this TES (own and exchanged)
+  delegate: true                        # false: call with the service identity only (tasks owned by the WES, D-010)
+  scopes: [tes.submit, tes.read, tes.cancel]   # asked for in the exchange (not empty); openid ga4gh_passport_v1 are never taken from here: added only with resolve_in_wes false (D-069)
 resolver:                               # DRS resolver (system.md section 4, steps 5 and 6)
+  resolve_in_wes: true                  # false: drs:// goes to the TES unchanged, which resolves it (D-069). Needs all of: the TES has
+                                        # drs.enabled, this client's scopes in the broker include openid ga4gh_passport_v1, tes.delegate true
   passport_hosts: [drs.yai.test]        # DRS hosts that may receive Passports
   host_override: {drs.yai.test: "http://127.0.0.1:8402"}   # unit tests only (G-DRS-01)
   compact: {yaitest.drs: "http://127.0.0.1:8402/ga4gh/drs/v1/objects/{id}"}   # G-DRS-02

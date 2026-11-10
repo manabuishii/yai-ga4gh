@@ -6,6 +6,8 @@ max_bulk_request_length: 100
 signed_url_ttl_seconds: 3600
 url_secret_file: /yai/var/drs/url-secret
 test_endpoints: false           # the test clock (/yai/test/clock) is for local tests only (D-054)
+authorizations:
+  expose_dataset: true            # yai_required_visas (D-072)
 auth:
   mode: aai
   issuer: https://aai.yai.test/

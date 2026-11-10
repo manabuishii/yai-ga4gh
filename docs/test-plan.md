@@ -58,12 +58,12 @@
 | --- | --- | --- | --- |
 | NEG-AUTH-NONE | 全 API | 資格情報なしで、要るはずの操作が 401 | 1 |
 | NEG-AUTH-WRONG-AUD | 全 API | 別のサービスあての AT(`aud=yai-tes` を WES に)が 401 | 1 |
-| NEG-AUTH-KIND | 全 API | Passport を Bearer に、PSAT を Bearer に入れると 401(種類の取り違え) | 1 |
+| NEG-AUTH-KIND | 全 API | Passport を Bearer に、PSAT を Bearer に入れると 401(種類の取り違え)。例外は `drs.enabled` の TES の自分あての PSAT(D-069) | 1 |
 | NEG-AUTH-ALG | 全 API | `alg=none`・`HS256`(公開鍵を秘密として使う)の JWT が 401 | 1 |
 | NEG-AUTH-EXPIRED | 全 API | 期限切れ(60 秒のずれを超えた)の AT・Passport・Visa | 1 |
 | NEG-AUTH-NOSCOPE | 全 API | 有効だが権限なし(scope が足りない)が 403 | 1 |
 | NEG-OTHER-USER | TES・WES | bob が alice のタスク・run を取得・取り消し・ログ・出力 → 404。一覧に出ない | 1(TES・DRS・AAI の単体)・2(WES を含むもの) |
-| NEG-TAG-SPOOF | TES | 利用者が `yai.on_behalf_of` を付けて CreateTask → 400 | 1 |
+| NEG-TAG-SPOOF | TES | `yai.on_behalf_of` や知らない `yai.` の tag を付けて CreateTask → 誰でも 400。「誰の代わりか」は AT の `sub`・`act` だけ(D-067)。`yai.run_id`・`yai.submit_nonce` は誰でも付けられる(D-071) | 1 |
 | NEG-PASSPORT-NOT-LOGGED | WES | Passport が `RunLog.request`・DB・ログのどこにも出ない(ログの全文を探す) | 1 |
 | NEG-PASSPORT-NOT-IN-TES | WES→TES | TES の task_json・tags に Passport が入らない | 2 |
 | NEG-DRS-ACCESSID-REUSE | DRS | 別のオブジェクトの `access_id`・署名を流用 → 404・403 | 1 |
@@ -73,6 +73,7 @@
 | NEG-DRS-REVOKE | DRS | Visa の期限が切れた利用者は新しい `/access` を取れない。出し済みの Visa は `exp` まで使える。URL は Visa より先に切れ、流している途中の取得も URL の期限で切れる(`aai.md` 4 節)。Option B の境目(`now + 60 分 + 60 秒` と `exp` の前後 1 秒)も試す。試験用の時計を進めて測る | 1 |
 | NEG-DRS-REVOKE-AT-ISSUER | DRS | 試験用の Visa 発行役の利用者表から権限を外したあとも、出し済みの Visa・Passport では Option B の窓(Visa の `exp` − URL の期限 − 60 秒)まで `/access` が通る(仕様の限界、AAI-FMT-06)。新しく発行した Passport では 403(ユーザー 2026-10-16 00:39) | 1 |
 | NEG-DRS-REASSIGN | DRS | `yai drs set-dataset` でオブジェクトの dataset を変えた直後から、元の dataset の Passport での新しい `/access` は 403、新しい dataset の Passport では 200。出し済みの署名付き URL は自分の期限まで使え、期限の後は 403(同上) | 1 |
+| INT-DRS-REQUIRED-VISAS | DRS | `dataset` の方針のオブジェクトの OPTIONS と `access_methods[].authorizations` に `yai_required_visas`(type と value=dataset)が出る。`public`・`bearer` には出ない。設定 `authorizations.expose_dataset: false` で消える(D-072) | 1 |
 | NEG-DRS-MIXED-POLICY | DRS | `metadata_policy=public`・`access_policy=dataset` のオブジェクト: メタデータは誰でも、配信口は署名なしで 403、Passport なしの `/access` は 401 | 1 |
 | NEG-PASSPORT-SEND-UNTRUSTED | WES→DRS | 入力に、許可していない DRS のホストの `drs://`、`passport_auth_issuers` が Passport の Visa と重ならない DRS、リダイレクトする DRS を混ぜる → その先に Passport が 1 回も届かない(偽の DRS で受信を数える)、run は SYSTEM_ERROR(DRS-AUTH-07) | 2 |
 | NEG-JKU-REDIRECT | AAI | 許可した `jku` が別の先へリダイレクトする → 従わずに拒否。応答が 64 KiB を超える・5 秒を超える鍵の先も拒否 | 1 |
@@ -83,6 +84,9 @@
 | NEG-AAI-MULTI-ID | AAI | Passport の `sub` と違う `sub` の Visa でも、1 つの Visa で判定できれば通る。2 つの身元の Visa を組み合わせる方針は無い(最小版) | 1 |
 | NEG-AAI-OPTB | AAI | Visa の残りが署名付き URL の期限より短いとき URL を出さない | 1 |
 | NEG-PATH | TES | `..`・相対パス・`/proc` などの入出力の `path` → 400 | 1 |
+| TES-DRS-RESOLVE | TES | `drs.enabled` の TES に、利用者の PSAT(本人のもの・WES が代理で交換したもの)で `drs://` の入力を出す → TES が Passport に替えて解き COMPLETE。保存した URL に署名が無く、`system_logs` に `drs://` が残る(D-069)。`tests/test_tes.py::test_drs_inputs_resolved_at_the_tes`、4 つまとめて `INT-TES-DRS-DIRECT` | 1・2 |
+| NEG-TES-DRS | TES | passport-scoped でない AT・Visa の無い利用者・サービスの AT → 403。取り消した利用者の PSAT → 403(交換で断られる)。無いオブジェクト → 400。`drs.enabled` でない TES では `drs://` が 400、PSAT を Bearer にすると 401(D-008) | 1 |
+| AAI-PASSPORT-DELEGATED | AAI | D-067 の交換で得た TES あての AT が PSAT(client の scopes に `openid ga4gh_passport_v1`)で、`aud` の TES だけが Passport に替えられる(WES は `invalid_grant`、G-AAI-11)。普通の AT・サービスの AT・取り消した利用者の PSAT・別の client あてのログインの PSAT では `invalid_grant`、client 認証なしは 401(D-069) | 1 |
 | NEG-SSRF | TES・WES | 許していないホスト・ポートの `https` の入力・`workflow_url` → 400。許したホストから許していない先へのリダイレクト → 従わない。大きすぎる・遅すぎる応答 → 打ち切り | 1(TES・DRS・AAI の単体)・2(WES を含むもの) |
 | NEG-ATTACH-NAME | WES | `../x`・`/etc/x`・空の名前の添付 → 400 | 1 |
 | NEG-PASSPORT-BIG | WES | Visa 20 個の Passport(数十 KB)を `yai_passports` で渡しても受け付けられる | 1 |
@@ -103,7 +107,9 @@
 | NEG-EMPTY-SECRET | DRS・TES・WES・AAI | 空・短い(32 字未満)HMAC の鍵のファイル(`url-secret`・`page-secret`)と、AAI のクライアントの 32 字未満・見本の値(`CHANGE-ME`)の秘密で起動しない(D-055)。無いときに作る鍵は 64 字・0600(D-044) | 1 |
 | NEG-CONFORMANCE-STOPS | TES(試験の道具) | `tools/conformance_tes.py` が立てた認証なしの TES と worker を、SIGTERM でも道具の失敗でも必ず止める(D-044) | 1 |
 | NEG-WES-RUN-LIMIT | WES | 利用者ごとの終わっていない run は `max_active_runs_per_user` まで、超えたら 429。同時に出しても超えない。ほかの人は数えない。終わった run の見張りのスレッドは残らない(D-044) | 1 |
-| NEG-TES-TASK-LIMIT | TES | 利用者ごとの終わっていないタスクは `max_active_tasks_per_user` まで、超えたら 429。同時に出しても超えない。ほかの人と、サービスが代わりに出した分(`yai.on_behalf_of` ごと)は別に数える。送り直し(同じ nonce)は上限でも前の id(D-053、点検 N-1) | 1 |
+| NEG-REVOKE-AT-EXCHANGE | AAI | `/test/revoke` の後、その前に出した PSAT・AT の交換(Passport・代理の AT)は 400。出し済みの交換した AT は期限まで有効。新しいログインで解ける(D-070) | 1 |
+| NEG-EXCHANGE-AT | AAI | 代理の AT の交換: 他のサービスあての AT・PSAT・サービスの AT・client に許していない audience は 400。client は自分あての AT しか交換できない(D-067) | 1 |
+| NEG-TES-TASK-LIMIT | TES | 利用者ごとの終わっていないタスクは `max_active_tasks_per_user` まで、超えたら 429。同時に出しても超えない。ほかの人と、サービスが代わりに出した分(代理 `act.sub` ごと)は別に数える。送り直し(同じ nonce)は上限でも前の id(D-053、点検 N-1) | 1 |
 | NEG-URL-USERINFO | TES・WES | 記録用の URL・ログ・終わったタスクと run から URL の `user:pass@` を消す(壊れた URL も)。起動のとき前の版で終わったタスクからも消す(D-044) | 1 |
 | NEG-DISK-LIMITS | TES | 入力・出力の個数の上限を超えたら 400、1 タスクの出力の合計の上限を超えたら SYSTEM_ERROR(超えた出力は公開しない・一時のものも残さない)(D-044) | 1 |
 | NEG-OUTPUT-EXISTS | TES | 他人のファイルがある・無い・途中がファイルのどれでも受け付けは 200(有無で返事を変えない)。あれば上書きせず SYSTEM_ERROR、理由は同じ文。自分の出力と重なるときだけ 400(D-044) | 1 |

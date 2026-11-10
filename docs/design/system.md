@@ -46,8 +46,11 @@ sequenceDiagram
   W->>D: ⑥ POST /objects/{id}/access/{access_id}(passports=[②])
   D->>A: ⑦ 鍵の取得(Broker の JWKS、Visa の jku は許可表で確かめてから)
   D-->>W: ⑧ 署名付き URL(期限つき、ヘッダーなし)
-  W->>A: ⑨ WES のサービス用トークン(client_credentials、aud=yai-tes)
-  W->>T: ⑩ CreateTask(Bearer=⑨、入力 url=⑧、tags に run_id・on_behalf_of)
+  W->>A: ⑨ ③ を TES あての AT に交換(RFC 8693、sub=利用者、act=WES)
+  W->>T: ⑩ CreateTask(Bearer=⑨、入力 url=⑧、tags に run_id)
+  Note over W,T: 設定で TES が drs:// を解くとき(D-069): ⑤⑥⑧ を WES は行わず、⑩ の入力は drs:// のまま
+  T->>A: ⑰ ⑨ の PSAT を Passport に交換(AAI 1.2 の手順、TES が client 認証)
+  T->>D: ⑱ POST /objects・/access(passports=[⑰])→ 署名付き URL を保存
   T->>B: ⑪ 実行役が署名付き URL からバイト列を取る(資格情報なし)
   T->>T: ⑫ executor を実行 → 出力をファイル置き場へ → COMPLETE
   W->>T: ⑬ GetTask(view=FULL)で状態とログを取る(Bearer=⑨)
@@ -62,7 +65,7 @@ sequenceDiagram
 | (b) | TES が作成時に利用者の資格情報を預かり、自分で `drs://` を解決する | DRS の URI のまま TES に渡せる | TES 1.1 に資格情報の欄が無い(独自の拡張が要る)。預かった資格情報の保管と期限切れ。他の TES と相互運用できない |
 | (c) | DRS が TES のサービスの身元を信頼して、利用者に代わって出す | 実装が楽 | DRS で利用者ごとの認可ができなくなる(D-004 の Clearinghouse の意味が無くなる) |
 
-(b) は「あとで深める」で、yai-tes 独自の拡張として試す(TES が DRS のクライアントになる練習。`tes.md` 6 節)。
+(b) は yai-tes の拡張として実装した(D-069、設定 `drs.enabled`、既定は切)。TES は資格情報を「預かる」のではなく、呼び手の Bearer(利用者の Passport-Scoped Access Token)を AAI 1.2 の手順で Passport に替えて `drs://` を解き、署名付き URL だけを保存する(⑰⑱)。
 
 ## 4. 各呼び出しの主体・権限・資格情報・期限
 
@@ -87,13 +90,15 @@ sequenceDiagram
 | ⑤⑥ | WES → DRS PostObject・PostAccessURL | **利用者の代わり**(Passport の `sub`) | Passport の Visa が、オブジェクトのデータセットへの ControlledAccessGrants を持つ | 本文の `passports=[Passport]`。WES 自身の資格情報は付けない。**送ってよい先を絞る**: (0) OPTIONS(か `AccessMethod.authorizations`)が `None` なら Passport を送らずに GET で解決する(C-26)。`PassportAuth` のときだけ:(1) 設定の「Passport を送ってよい DRS のホスト」に有る(外の DRS はホストごとに明示)、(2) `passport_auth_issuers` が Passport の中の Visa の `iss` と重なる(DRS-AUTH-07)、(3) リダイレクトに従わない。どれかに外れたら送らずに `SYSTEM_ERROR` | Passport の `exp` まで | DRS が 401・403 → run は `SYSTEM_ERROR`、`system_logs` に理由 |
 | ⑦ | DRS → aai(鍵) | DRS(認証なし) | — | なし(公開鍵の取得)。`jku` は Clearinghouse の許可表に有るものだけ(AAI-CH-07) | 鍵の保持は 1 時間、`kid` が無いときだけ取り直す(1 分に 1 回まで、仮) | 鍵が取れない → その Passport は拒否(401) |
 | ⑧ | DRS → WES(応答) | — | — | 署名付き URL(`AccessURL.url` だけ、`headers` なし) | **既定 60 分、設定で短くできる(仮 D-019)**。Option B により必ず Visa・Passport の `exp` より前に切れる。配信口は始まった転送も URL の期限で切る(`aai.md` 4 節) | — |
-| ⑨ | WES → aai | WES(サービス) | — | client_credentials(WES のクライアント ID と秘密。設定ファイル、git に入れない) | AT 15 分。期限の 1 分前に取り直す | 401 → run は `SYSTEM_ERROR` |
-| ⑩ | WES → TES CreateTask | **WES(サービス)**。利用者は tags の `yai.on_behalf_of` に書くだけ(仮 D-010) | `tes.submit`+`tes.delegate`(代理でタスクを出してよい)。WES のサービスの AT は `tes.submit tes.read tes.cancel tes.delegate` の 4 つを持つ(⑬・取り消しにも使う) | AT(`aud=yai-tes`、サービス用) | 同上 | 401・403・400 → run は `SYSTEM_ERROR` |
+| ⑨ | WES → aai(Token Exchange) | **利用者の代わり**(WES が client 認証) | — | 利用者の AT(③、`aud=yai-wes`)を subject_token に、RFC 8693 で `aud=yai-tes` の AT に交換する(D-067)。出る AT は `sub`=利用者、`act.sub`=WES、scope は WES の client に許した `tes.submit tes.read tes.cancel`。Broker は「③ がこの WES あてに出た AT であること」を確かめる(WES は自分を呼んだ利用者の代わりにしかなれない)。WES のクライアント ID と秘密は設定ファイル、git に入れない | **交換した AT は Passport と同じ 120 分(`ttl.delegated_access_token`、仮)**。メモリだけに持ち、run が終わったら消す。受付の時点で交換するので利用者の AT(15 分)の期限は効かない | 交換できない → RunWorkflow が 500(run は作らない)。途中で切れた → これから出す段は `SYSTEM_ERROR`、見張りと取り消しは自分のサービスの AT(client_credentials)で続ける |
+| ⑩ | WES → TES CreateTask | **利用者**(交換した AT の `sub`)。WES は代理(`act.sub`、D-067) | `tes.submit`。tags は `yai.run_id`・`yai.submit_nonce`(誰でも付けられる札。「誰の代わりか」は tag では運ばない) | AT(⑨ で交換したもの)。WES の client の scopes に `openid ga4gh_passport_v1` が有れば、これは PSAT でもある(D-069) | ⑨ の期限 | 401・403・400 → run は `SYSTEM_ERROR` |
+| ⑰ | TES → aai(Token Exchange、`drs.enabled` のときだけ) | **利用者の代わり**(TES が client 認証) | — | ⑩ の Bearer(利用者の PSAT。利用者本人のものでも ⑨ のものでも)を subject_token に、AAI 1.2 の手順で Passport を得る(D-069)。passport-scoped でない AT・サービスの AT では 403 | Passport は使ったら捨てる(保存しない) | 交換できない → CreateTask が 403(取り消し済み)か 500(Broker に届かない) |
+| ⑱ | TES → DRS PostObject・PostAccessURL(`drs.enabled` のときだけ) | **利用者の代わり**(⑰ の Passport の `sub`) | ⑤⑥ と同じ | ⑤⑥ と同じ手順・同じ絞り方(共有の解決役)。署名付き URL だけを保存し、取り終えたら問い合わせ部分を消す(D-068) | ⑧ の期限 | DRS が 401・403 → CreateTask が 403(タスクは作らない) |
 | ⑪ | TES 実行役 → 配信口 | なし(URL そのものが資格情報) | — | 署名付き URL | ⑧ の期限。**期限切れならタスクは `SYSTEM_ERROR`**(取得の失敗) | `SYSTEM_ERROR` |
 | ⑫ | 実行役 → 出力の置き場 | TES(サービス) | — | なし(手元のファイル。`file://` の決められた根の下だけ) | — | 出力の転送の失敗 → `SYSTEM_ERROR`(TES-ST-02) |
-| ⑬ | WES → TES GetTask・CancelTask | WES(サービス) | `tes.read`・`tes.cancel`(自分が出したもの) | AT(サービス用) | 同上 | 取れない間は run の状態を変えない。30 分続いたら `SYSTEM_ERROR` にし、CancelTask を出し続ける(`wes-states.yaml`) |
+| ⑬ | WES → TES GetTask・CancelTask | 利用者(交換した AT。見えるのは同じ(持ち主, 代理)の組のタスクだけ)。再起動で交換した AT を失った後は **WES(サービス)**: TES は代理のサービスに、その代理が出したタスクを見せる(D-067) | `tes.read`・`tes.cancel`(自分が出したもの) | AT(⑨ で交換したもの。無ければ client_credentials のサービス用の AT、15 分、期限の 1 分前に取り直す) | 同上 | 取れない間は run の状態を変えない。30 分続いたら `SYSTEM_ERROR` にし、CancelTask を出し続ける(`wes-states.yaml`) |
 | ⑭ | 利用者 → WES | 利用者 | 自分の run だけ(WES-LST-03) | AT(`aud=yai-wes`) | 15 分 | 他人の run は 404(仮 D-013) |
-| ⑮ | 利用者 → TES 直接 | 利用者 | 自分のタスク、と `yai.on_behalf_of` が自分のタスクを**読むだけ** | AT(`aud=yai-tes`) | 15 分 | 他人のものは 404 |
+| ⑮ | 利用者 → TES 直接 | 利用者 | 自分のタスク(直接出したものも、WES が代理で出したものも持ち主は自分)。WES が代理で出したものは**読むだけ**(取り消しは WES の CancelRun から) | AT(`aud=yai-tes`) | 15 分 | 他人のものは 404 |
 | ⑯ | 利用者 → DRS 直接 | 利用者 | オブジェクトの方針(公開/Bearer/Passport) | なし・AT(`aud=yai-drs`)・本文の Passport | — | 401・403 |
 
 ## 5. 時刻と期限
@@ -115,6 +120,10 @@ sequenceDiagram
 
 DRS は Option B(`now + accessTokenTTL < token.exp`)を使い、`accessTokenTTL` = 署名付き URL の期限(60 分)とする。つまり **Visa・Passport の残りが 60 分を切っていたら URL を出さない**。このため Passport・試験用 Visa の期限は URL の期限より長く(120 分)する。**同じ長さにすると、発行の直後でも条件が成り立たず URL が 1 つも出ない**(自己レビュー R-01 で見つけて直した)
 
+TES が `drs://` を解くとき(D-069、⑰)も交換なので、取り消しは同じく次の交換から効く(取り消した利用者の PSAT では CreateTask が 403)。
+
+**取り消しが効くまでの窓**(D-070): 発行元で権限を外しても(利用者表から Visa を外す・`/test/revoke`)、効くのは**次の交換**からで、出し済みの Passport・交換した AT・署名付き URL はそれぞれの `exp` まで使える。DRS から新しい署名付き URL を出せる窓は `min(Passport.exp, Visa.exp) − 署名付き URL の期限 − 時計のずれ`(Option B)。既定(Passport・Visa 120 分、URL 60 分、ずれ 60 秒)では**最長 59 分**、Passport・Visa 5 分・URL 60 秒のデモの設定では 180 秒(2026-11-09 の実測と一致)。窓を縮めるには Passport・Visa と URL の期限を短くする(既定は変えていない)。本物の取り消し(RFC 7009)は IdP の仕事で、試験用 Broker は持たない(G-AAI-09)
+
 ## 6. ID と URI の形
 
 | もの | 形 | 例 | 理由 |
@@ -133,9 +142,9 @@ DRS は Option B(`now + accessTokenTTL < token.exp`)を使い、`accessTokenTTL`
 ## 7. 利用者の分離
 
 - 資源(TES タスク・WES run・DRS オブジェクト)は作った主体 `owner=(iss, sub)` を**作成時に保存**する。一覧・取得・ログ・取り消し・出力の取得のすべてで比べる
-- 他人の資源は「無い」と同じ 404(仮 D-013)。403 は「見えるが、その操作の権限が無い」とき(例:TES で `on_behalf_of` の利用者がタスクを取り消そうとした)
-- WES が出した TES タスク: `owner=WES のサービス`、tags に `yai.on_behalf_of=<iss>|<sub>` と `yai.run_id`。利用者本人は TES で**読むことだけ**できる(`tes_uri` を辿れるように)。取り消しは WES の CancelRun から
-- `yai.` で始まる tags は**サービスだけが付けられる**。利用者が CreateTask で付けたら 400(なりすまし防止)
+- 他人の資源は「無い」と同じ 404(仮 D-013)。403 は「見えるが、その操作の権限が無い」とき(例:TES で、WES が代理で出したタスクを持ち主の利用者が取り消そうとした)
+- WES が出した TES タスク(D-067): `owner=利用者`(交換した AT の `sub`)、`actor=<iss>|<WES の sub>`(AT の `act.sub`)、tags に `yai.run_id`。利用者本人は TES で**読むことだけ**できる(`tes_uri` を辿れるように)。取り消しは出した組(持ち主+代理)か、代理のサービス本人(自分の AT)。WES は自分の AT でも、自分が代理で出したタスクを読める(再起動の後の見張り)。**交換した AT で見えるのは同じ(持ち主, 代理)の組のタスクだけ**: 利用者が直接出したタスクは、その利用者の代理の AT を持つ WES にも見えない(404)
+- `yai.` で始まる tags は `yai.run_id`・`yai.submit_nonce` だけで、**誰でも付けられる札**(D-071)。「誰の代わりか」を tag で運ばない(`yai.on_behalf_of` は 400)。知らない `yai.` の tag も 400
 - DRS のオブジェクトに owner は無い(読み取り専用、DRS-RO-01)。認可はオブジェクトの方針(公開/Bearer/データセット)
 
 ## 8. 誤りの返し方
@@ -151,7 +160,7 @@ DRS は Option B(`now + accessTokenTTL < token.exp`)を使い、`accessTokenTTL`
   - HTTP のアクセスログ(uvicorn・前段の proxy): 道だけを残し、問い合わせ部分と `Authorization` を残さない(ログの形を設定で固定する)
   - アプリのログ: 書く前に共通の消し役を通す(JWT の形の文字列・`sig=` の値・`Authorization` を伏せ字にする)。トークンは `jti` か SHA-256 の先頭 8 文字だけ
   - 例外: 誤りの応答の `msg` に要求の本文・ヘッダーを入れない。スタックトレースは応答に出さない
-  - TES の `tesInput.url` に入る署名付き URL: TES の DB には残る(実行に要る)。**読めるのは、出した WES のサービスと `yai.on_behalf_of` の本人だけ**(`permissions.yaml`)。TES のログには問い合わせ部分を除いて書く。タスクが終わったら URL の問い合わせ部分を DB から消す。同じ書き込みで `inputs[].content`(WES の添付もここで渡る)も項目ごと消す。起動のとき、前の版で終わったタスクにも掛ける(D-043)
+  - TES の `tesInput.url` に入る署名付き URL: TES の DB には**入力を取り終わるまで**残る(取得に要る)。**読めるのは、持ち主の利用者と、代理で出した WES のサービスだけ**(`permissions.yaml`)。TES のログには問い合わせ部分を除いて書く。全部の入力を取り終えた書き込み(INITIALIZING → RUNNING)で URL の問い合わせ部分を DB から消す(D-068。再起動は RUNNING からは取り直さない)。タスクが終わったら同じ書き込みで `inputs[].content`(WES の添付もここで渡る)も項目ごと消す。起動のとき、前の版で終わったタスクにも掛ける(D-043)
   - WES の `request`(`workflow_url`・File の `location`)に入る署名付き URL: run が終わったら、終わりの状態と同じ書き込みで問い合わせ部分を消す。`system_logs` には問い合わせ部分を書かない(D-030 案 A)。`runs/<id>/` に保存した文書・添付は、run が終わったらディレクトリごと消す(終わりを書いた直後と、起動のとき。D-030 の拡張)
   - 試験: 区別できる「目印の秘密」(例 `CANARY-<乱数>`)を各資格情報に入れて流し、全ログと、資格情報を持たない人が見える応答に 1 つも出ないことを確かめる(NEG-SECRET-IN-LOG)
 
@@ -172,8 +181,8 @@ DRS は Option B(`now + accessTokenTTL < token.exp`)を使い、`accessTokenTTL`
 | C-08 | TES → WES の TaskLog | `stdout`・`stderr` を写せる | TES の `ExecutorLog.stdout` は**中身の文字列**、WES の `Log.stdout` は**取りに行く URL** | 合わない | WES が自分の URL(`/ga4gh/wes/v1/runs/{run_id}/tasks/{task_id}/stdout`、yai 独自、WES と同じ AT で取れる、WES-LOG-01)で返す。**TES の stdout は中身・先頭か末尾だけ・URL だけのどれもありうる**(TES 原文)ので、完全さは約束しない。URL だったら中身として配らず、その旨を返す。完全なログが要るなら executor の `stdout` をファイルにして TES の出力として保存させる(G-WES-03) | 2 | INT-LOG-URL | TES が中身・切り詰め・URL のどれを返しても、WES の stdout の口が 200 で何かを返し、URL の場合は中身として配らない |
 | C-09 | TES → WES の TaskLog | `exit_code` は 1 つ | TES は executor ごとに `exit_code`(複数ありうる) | 注意 | 最小版は 1 タスク 1 executor に限る。深める段階では「最後に動いた executor」を写す | 2 | INT-EXIT-CODE | 1 タスク 1 executor の `exit_code` が写る |
 | C-10 | TES → WES | 時刻をそのまま写せる | TES は RFC 3339(小数・時差つきもありうる)、WES は `%Y-%m-%dT%H:%M:%SZ` | 合わない | UTC に直して小数を切り捨てる(D-015) | 2 | INT-TIME-FORMAT | 小数・時差つきの TES の時刻が `%Y-%m-%dT%H:%M:%SZ` の UTC になる |
-| C-11 | WES → TES(⑩) | 利用者の代わりにタスクを出す | TES は「利用者が出してよいか」を実装が決める(TES-AUTH-02)。代理の決まりは無い | 注意 | サービスの AT(`tes.delegate`)+tags。利用者は読むだけ(7 節) | 2 | INT-TES-DELEGATE, NEG-TAG-SPOOF | WES が出したタスクの持ち主は WES、tags に本人。利用者が `yai.` の tags を付けると 400 |
-| C-12 | 利用者 → TES(`tes_uri`) | WES の `tes_uri` を辿ればタスクが見える | `tes_uri` は任意で、見るための資格情報は決まっていない | 注意 | `yai.on_behalf_of` の本人は AT(`aud=yai-tes`)で読める | 2 | INT-TES-URI-READ | 本人の AT で `tes_uri` が 200、別人は 404 |
+| C-11 | WES → TES(⑩) | 利用者の代わりにタスクを出す | TES は「利用者が出してよいか」を実装が決める(TES-AUTH-02)。代理の決まりは無い | 注意 | 利用者の AT を RFC 8693 で TES あてに交換した AT(`sub`=利用者、`act.sub`=WES、D-067)。持ち主は利用者、代理は WES。利用者は読むだけ(7 節) | 2 | INT-TES-DELEGATE, NEG-TAG-SPOOF | WES が出したタスクの持ち主は利用者(`sub`)、代理は WES(`act.sub`)、tags に `yai.on_behalf_of` は無い。`yai.on_behalf_of` は誰が付けても 400、`yai.run_id`・`yai.submit_nonce` は誰でも付けられる。利用者は自分の AT で読めるが取り消せない(403)、bob には 404 |
+| C-12 | 利用者 → TES(`tes_uri`) | WES の `tes_uri` を辿ればタスクが見える | `tes_uri` は任意で、見るための資格情報は決まっていない | 注意 | 持ち主(交換した AT の `sub`)本人は自分の AT(`aud=yai-tes`)で読める(D-067) | 2 | INT-TES-URI-READ | 本人の AT で `tes_uri` が 200、別人は 404 |
 | C-13 | WES ↔ TES のページング | 次のページの合図が同じ | WES は「空文字で終わり」、TES は書いていない(無いか空か) | 注意 | yai-tes は終わりで `next_page_token` を**出さない**。yai-wes は TES からの「無い」と「空文字」の両方を終わりと読む(G-X-04) | 2 | INT-PAGING-END | TES が token を出さない・空文字・null のどれでも WES の一覧が終わる |
 | C-14 | 利用者 → WES の入力 | `drs://` を入力に書ける | WES は「入力の URL を理解して取りに行けること」を求める(WES-RUN-04)。`supported_filesystem_protocols` の語は決まっていない | 注意 | yai-wes の service-info に `drs`・`https` を載せる | 2 | WES-SI-PROTO | WES の service-info に `drs`・`https` |
 | C-15 | WES の解決役 → DRS | ホスト名型 URI から URL が作れる | 仕様は https・443 固定 | 合わない | 4 つまとめた試験は TLS の 443。単体は上書き表(G-DRS-01) | 2 | INT-DRS-HOSTNAME | TLS の 443 で `drs://drs.yai.test/<id>` が解決できる |
@@ -186,7 +195,7 @@ DRS は Option B(`now + accessTokenTTL < token.exp`)を使い、`accessTokenTTL`
 | C-22 | service-info 3 つ | 同じ service-info 1.0.0 の `Service` | 3 つとも v1.0.0 を外部 `$ref` | 合う | 共通の部品で作る。`type.version` は各仕様の版(`1.5.0`・`1.1.0`・`1.1.0`) | 2 | SI-ALL | 3 つの service-info が service-info 1.0.0 の形に合う |
 | C-23 | 誤りの形 | 3 つで同じ形 | DRS・WES は `{msg, status_code}`、TES は無し | 注意 | TES も同じ形(D-011) | 2 | ERR-SHAPE | TES の 4xx が `{msg, status_code}` |
 | C-24 | 一括取得(WES → DRS) | 複数の入力を 1 回で解決できる | 一括は Passport か「1 つの Bearer」だけ、`maxBulkRequestLength` を超えると 413 | 注意 | 最小版の解決役は 1 件ずつ呼ぶ。一括は DRS 単体の試験で確かめる | 1(単体) | DRS-BULK-* | 一括を使わずに E2E-01 が通る(一括は DRS の単体の試験) |
-| C-25 | WES のステップの間(TES の `file://`) | 前のステップの出力を次のステップの入力にできる | TES はタスクごとの所属を知らない。WES が出したタスクの持ち主はすべて WES のサービス | 合わない | TES の出力の記録に「持ち主・`yai.on_behalf_of`・`yai.run_id`・作ったタスク」を残す。WES のサービスが出すタスクの `file://` の入力は、**同じ `yai.on_behalf_of` かつ同じ `yai.run_id`** の出力だけ。利用者が直接出すタスクは同じ持ち主の出力だけ | 2 | INT-FILE-SAME-RUN | 同じ run のステップの間は通る。別の利用者・別の run の出力を指すと 400 |
+| C-25 | WES のステップの間(TES の `file://`) | 前のステップの出力を次のステップの入力にできる | TES はタスクごとの所属を知らない。WES が出したタスクの持ち主はすべて WES のサービス | 合わない | TES の出力の記録に「持ち主・代理(`act.sub`)・`yai.run_id`・作ったタスク」を残す。代理で出すタスクの `file://` の入力は、**同じ持ち主・同じ代理・同じ `yai.run_id`** の出力だけ。利用者が直接出すタスクは、自分が直接出したタスクの出力だけ(D-067) | 2 | INT-FILE-SAME-RUN | 同じ run のステップの間は通る。別の利用者・別の run の出力を指すと 400 |
 | C-26 | WES の解決役 → 公開の DRS | DRS の解決にはいつも Passport が要る | DRS の取り方は公開(認証なし)もある。相互運用の最初の相手(passport-playground-drs)は Passport の POST を持たない | 注意 | 先に OPTIONS(か `AccessMethod.authorizations`)を見て、`None` なら **Passport を送らずに** GET で解決する。Passport を送るのは `PassportAuth` のときだけ、かつ「Passport を送ってよい DRS のホスト」の設定に有るとき。外の DRS はホストごとに明示して足す(同じ運用者の範囲という C-19 の理由は外の DRS には使えない) | 2 | INT-DRS-PUBLIC | 公開の DRS には Passport が 1 度も届かず、解決できる |
 | C-27 | WES → TES(署名付き URL の期限) | URL は TES が取るまで有効 | DRS の `AccessURL` に期限の欄が無い(G-DRS-10)。外の DRS の URL の期限は分からない | 注意 | yai-drs の URL は 60 分。外の DRS の URL は期限を仮定しない。TES の取得は、401・403 なら再試行せず SYSTEM_ERROR、通信の失敗は 3 回まで(間をあけて)再試行。`Range` での続きの取得も、期限の後は 403 で SYSTEM_ERROR | 2 | E2E-07 | 期限の後に待ちを解いたタスクは SYSTEM_ERROR、期限の直前に取り始めたものは期限までに終われば COMPLETE |
 <!-- C 表ここまで -->

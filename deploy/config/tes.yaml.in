@@ -13,6 +13,13 @@ auth:
   audience: yai-tes
 fetch:
   allow: ["drs.yai.test:443"]
+drs:                              # the TES resolves drs:// inputs itself (D-069); on here for the combined tests
+  enabled: true
+  token_url: https://aai.yai.test/token
+  client_id: yai-tes
+  client_secret_file: /yai/local/secrets/tes-client-secret
+  passport_hosts: [drs.yai.test]
+  compact: {yaitest.drs: "https://drs.yai.test/ga4gh/drs/v1/objects/{id}"}
 runner:
   kind: @TES_RUNNER@              # docker (default) or local-process (without a Docker daemon)
   docker:

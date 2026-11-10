@@ -31,7 +31,8 @@
         "scopes": {"type": "array", "items": {"type": "string"}},
         "exp": {"type": ["integer", "null"]},
         "visas": {"type": "array", "items": {"$ref": "#/$defs/AcceptedVisa"}},
-        "client_id": {"type": ["string", "null"]}
+        "client_id": {"type": ["string", "null"]},
+        "actor": {"type": ["string", "null"], "description": "act.sub of a delegated AT: the service acting for sub (D-067)"}
       }
     },
     "Principal": {
@@ -43,7 +44,8 @@
         "sub": {"type": "string"},
         "kind": {"enum": ["user", "service", "anonymous"]},
         "scopes": {"type": "array", "items": {"type": "string"}},
-        "visas": {"type": "array", "items": {"$ref": "#/$defs/AcceptedVisa"}}
+        "visas": {"type": "array", "items": {"$ref": "#/$defs/AcceptedVisa"}},
+        "actor": {"type": ["string", "null"], "description": "sub of the service acting for this user (act.sub of the AT, D-067); null when the subject acts for itself"}
       },
       "additionalProperties": false
     },

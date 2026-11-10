@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from yai.common.fetch import Fetcher
-from yai.wes.resolver import DrsResolver, ResolveError
+from yai.common.resolver import DrsResolver, ResolveError
 
 
 class Recorder:

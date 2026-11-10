@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 操作 | service-info、CreateTask、ListTasks(絞り込み・ページング・view)、GetTask(view)、CancelTask | — |
 | 実行先 | 手元の Docker(1 台)。同時実行は 2(設定)。**段階 1 は手元のプロセス(D-024、ユーザー 2026-10-16 00:15)**: 実行役の差し込み口 `Runner`(`yai/tes/runner.py`)の先に置き、Docker の実行役はあとで同じ口に差し込む。パスの写し方・はずれる点・保留する試験は D-024。**Docker の実行役は段階 2 の下準備で書いた**(`yai/tes/docker_runner.py`、設定 `runner.kind: docker`、既定は手元のプロセスのまま。つなぐ先・パス・持ち主は D-034。段階 2 から手元の rootless Docker で動かす、D-037) | 別の実行先(Slurm など)、相互運用の相手の TES へ流す |
-| 入力 | `https`(署名付き URL を含む)と `content`。`file://` は決められた根の下だけ | `drs://` を TES 自身が解決する(独自の拡張、D-007 の案 (b))、`streamable` |
+| 入力 | `https`(署名付き URL を含む)と `content`。`file://` は決められた根の下だけ。**`drs://` を TES 自身が解決する**(yai の拡張、D-069、設定 `drs.enabled`、既定は切。呼び手の Bearer が利用者の Passport-Scoped Access Token のとき、yai-aai で Passport に替えて解き、署名付き URL だけ保存) | `streamable` |
 | 出力 | `file://` の決められた根の下。ワイルドカードなし | ワイルドカードと `path_prefix`(TES-CRT-06) |
 | executor | 複数可、順に実行、`ignore_error`、`workdir`・`env`・`stdin`・`stdout`・`stderr` | — |
 | 資源 | `cpu_cores`・`ram_gb` を Docker の上限に写す。`disk_gb`・`zones`・`preemptible` は受けて無視(service-info に書く) | `disk_gb` の上限 |
@@ -21,7 +21,7 @@
 | 操作 | 最小版の中身 | 義務(ID) |
 | --- | --- | --- |
 | GetServiceInfo | `type.artifact=tes`、`storage=["file:///…/outputs", "https://"]`、`tesResources_backend_parameters=[]` | TES-SI-01 |
-| CreateTask | 形の検査 → 絶対パスの検査 → `yai.` の tags の検査 → 保存(QUEUED)→ `id` を返す。読み取り専用の項目は捨てる。同じ主体から同じ `yai.submit_nonce` の tags が来たら、新しく作らず前の `id` を返す(WES の送り直しのため) | TES-CRT-01〜05・07・08、G-TES-04 |
+| CreateTask | 形の検査 → 絶対パスの検査 → `yai.` の tags の検査 → (`drs.enabled` なら `drs://` を解く: Bearer を Passport に交換 → DRS → 署名付き URL、D-069)→ 保存(QUEUED)→ `id` を返す。読み取り専用の項目は捨てる。同じ主体から同じ `yai.submit_nonce` の tags が来たら、新しく作らず前の `id` を返す(WES の送り直しのため。この確認は形の検査・`drs://` の解決より先: 前のタスクが出力を作り終えていても送り直しは前の `id`) | TES-CRT-01〜05・07・08、G-TES-04 |
 | ListTasks | 見えるタスクだけ。`name_prefix`・`state`・`tag_key`/`tag_value`(本文の表どおり)、`page_size`(既定 256、2048 以上は 400)、`view` | TES-LST-01〜03、TES-VIEW-01、G-TES-03 |
 | GetTask | 見えなければ 404。`view` 既定 `MINIMAL` | TES-VIEW-01 |
 | CancelTask | 本人だけ。終わったものは 200 で何もしない。それ以外は CANCELING にして実行役に知らせる | TES-CAN-01、G-TES-02、D-020 |
@@ -32,7 +32,7 @@
 - `file://` の入力・出力は設定の根(`var/tes/files/`)の下だけ。さらに
   - **出力の URL は、まだ無いファイルだけ**(上書きしない)。置き場へ写すときも「無ければ作る」(`O_EXCL`)で開き、有れば SYSTEM_ERROR
   - 出力の元のファイルが作業ディレクトリに無いときも SYSTEM_ERROR(TES-ST-02)。このときだけ `tesTaskLog.metadata` の `yai.missing_outputs` にその出力の `path` を書く(「,」区切り)。WES が「CWL の出力が無い」を EXECUTOR_ERROR に読み替えるための印(`wes.md` 1 節、D-026)
-  - **`file://` の入力は、同じ持ち主のタスクの出力として記録されたファイルだけ**(`output_files` の表で確かめる)。WES のサービスが代理で出すタスクは、**同じ `yai.on_behalf_of` かつ同じ `yai.run_id`** の出力だけ(`system.md` C-25)。WES のステップの間の受け渡しはこれで通る
+  - **`file://` の入力は、同じ持ち主のタスクの出力として記録されたファイルだけ**(`output_files` の表で確かめる)。WES が代理で出すタスク(AT に `act`)は、**同じ持ち主・同じ代理・同じ `yai.run_id`** の出力だけ(`system.md` C-25、D-067)。WES のステップの間の受け渡しはこれで通る
   - パスは要素ごとにリンクを辿らずに開く(根の下にリンクを置かれても外に出ない)。ホスト側のパスとコンテナの中のパスを別の型で扱う
   - **利用者の値を docker の引数・ホスト側のパスにするところ(D-041)**: `image` は Docker の参照の文法だけ(`yai/common/imageref.py`)で、argv では `--` の後ろ。コンテナの中のパスに `:` は使えない。`docker logs` は付けていない `logs/<i>/` に書き、宣言の `stdout`・`stderr` へは先にある物を名前で消してから写す(リンクの先に書かない)。付けるディレクトリはタスクの宣言だけから決めて executor の間で変えない(前の executor が置いたリンクで次の mount 元が変わらない)
   - 同じ OS の利用者がホストのファイルを直接いじることは、分離の対象外(D-002)
@@ -49,10 +49,11 @@
 
 | 点 | R1 | R2 | R3 | R4 |
 | --- | --- | --- | --- | --- |
-| CreateTask | AT(`aud=yai-tes`) | 利用者かサービス | `tes.submit`。`yai.` の tags はサービス+`tes.delegate` だけ | — |
-| List・Get | AT | 同上 | 本人か `yai.on_behalf_of` の本人(`permissions.yaml`) | — |
-| Cancel | AT | 同上 | 本人だけ(代理で出されたものは出したサービスだけ) | — |
+| CreateTask | AT(`aud=yai-tes`)。`act` があれば持ち主は `sub`、代理は `act.sub`(D-067)。`drs.enabled` なら自分あての PSAT も受ける(D-069、D-008 の例外) | 利用者かサービス | `tes.submit`。`drs://` の入力は利用者の PSAT(scope に `openid ga4gh_passport_v1`)のときだけ、それ以外は 403(D-069)。`yai.` の tags は `yai.run_id`・`yai.submit_nonce` だけ(誰でも。D-071)、`yai.on_behalf_of` は 400 | — |
+| List・Get | AT | 同上 | 持ち主本人(自分の AT)か、同じ(持ち主, 代理)の組(交換した AT)か、代理で出したサービス本人(自分の AT)(`permissions.yaml`、D-067) | — |
+| Cancel | AT | 同上 | 出した組(持ち主+代理)か、代理のサービス本人。持ち主本人は代理で出されたものを取り消せない(403) | — |
 | 実行役の入力の取得 | — | — | — | URL だけ(資格情報を持たない、D-007) |
+| `drs://` の解決(API、D-069) | 呼び手の PSAT を yai-aai で Passport に(TES が client 認証) | 利用者(本人か、代理で呼ばれた利用者) | DRS が Passport の Visa で判定(D-004 のまま) | Passport・Bearer は保存も記録もしない。DRS が 401・403 → 403、形 → 400、届かない → 500 |
 
 ## 4. 状態
 
@@ -81,6 +82,7 @@
 
 ## 6. 誤りの返し方
 
+- **出し直しの手順(idempotency、D-071、yai の拡張)**: クライアントは CreateTask の前に印を作り tags の `yai.submit_nonce` に入れる。応答が 5xx・timeout で「届いたか分からない」ときは、`GET /tasks?tag_key=yai.submit_nonce&tag_value=<印>` で探し(全ページ)、無ければ同じ印で出し直す。yai-tes は同じ持ち主+同じ印の CreateTask に前の `id` を返す(一意の制約)。yai-wes はこの手順で出している(`wes.md` 4 節)
 - 仕様に無い(G-TES-01)ので、DRS・WES と同じ `{msg, status_code}`(D-011)
 - 400: 形・パス・資源の上限・`yai.` の tags・`page_size`。401・403・404 は `system.md` 7 節
 

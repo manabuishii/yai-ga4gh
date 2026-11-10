@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 
-from yai.aai.service_auth import AtPrincipalResolver, JwtAuthenticator
+from yai.aai.service_auth import AtPrincipalResolver, JwtAuthenticator, bearer_token
 from yai.common import startup
 from yai.common.app import base_app
 from yai.common.body import json_body
@@ -19,13 +19,15 @@ from yai.common.fakes import (
     FixedPrincipalResolver,
     StaticBearerAuthenticator,
 )
-from yai.common.fetch import Fetcher
+from yai.common.fetch import Fetcher, FetchError, redact
 from yai.common.ids import new_id
 from yai.common.paging import PageState, PageTokens
+from yai.common.resolver import DrsResolver
 from yai.common.roles import Principal
 from yai.common.serviceinfo import service_info
 from yai.common.timeutil import Clock
 from yai.tes.db import TERMINAL, TaskLimit, TaskRow, TesDb
+from yai.tes.drs import DrsInputs
 from yai.tes.model import Limits, render, validate_task
 from yai.tes.worker import runner_kind
 
@@ -57,6 +59,23 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         allow=list(fetch.get("allow", ["drs.yai.test:443"])),
         insecure_http_hosts=list(fetch.get("insecure_http_hosts", [])),
     )
+    # D-069: drs:// inputs resolved here, for the user the caller's token names (off by default)
+    drs_cfg = config.get("drs") or {}
+    drs_inputs: DrsInputs | None = None
+    if drs_cfg.get("enabled"):
+        secret_file = Path(str(drs_cfg.get("client_secret_file")))
+        drs_inputs = DrsInputs(
+            token_url=str(drs_cfg.get("token_url", "https://aai.yai.test/token")),
+            client_id=str(drs_cfg.get("client_id", "yai-tes")),
+            client_secret=secret_file.read_text().strip(),
+            audience=str(drs_cfg.get("audience", "yai-drs")),
+            resolver=DrsResolver(
+                passport_hosts=list(drs_cfg.get("passport_hosts", ["drs.yai.test"])),
+                host_override=dict(drs_cfg.get("host_override", {})),
+                compact=dict(drs_cfg.get("compact", {})),
+                fetcher=fetcher,
+            ),
+        )
     lim = config.get("limits", {})
     limits = Limits(
         max_cpu=int(lim.get("max_cpu", 2)),
@@ -74,7 +93,9 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     authenticator: Any
     resolver: Any
     if mode == "aai":
-        authenticator, resolver = JwtAuthenticator(auth, clock), AtPrincipalResolver()
+        # with drs.enabled the caller's token may be a PSAT addressed to this TES (D-069)
+        authenticator = JwtAuthenticator(auth, clock, passport_scoped=drs_inputs is not None)
+        resolver = AtPrincipalResolver()
     elif mode == "static-bearer":
         authenticator = StaticBearerAuthenticator(auth.get("tokens", {}))
         resolver = FixedPrincipalResolver()
@@ -93,16 +114,32 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             raise ApiError(403, "forbidden")
         return principal
 
-    def obo(principal: Principal) -> str:
-        return f"{principal.iss}|{principal.sub}"
+    def acting_service(principal: Principal) -> str | None:
+        """`<iss>|<sub>` when the caller is a service (its own token): it sees the tasks it
+        submitted for users (D-067). A user, even one a service acts for, is not a service."""
+        return principal.self_ref if principal.kind == "service" else None
 
     def visible(row: TaskRow | None, principal: Principal) -> TaskRow:
-        """Visible only to the submitter or the yai.on_behalf_of user. Others get 404 (D-013)."""
+        """Visible to the owner with their own token (every task of theirs), to the same
+        (owner, actor) pair with an exchanged token (only what that service submitted for them),
+        and to the service that submitted it with its own token. Others get 404 (D-013, D-067)."""
         if row is None:
             raise ApiError(404, "task not found")
-        if everyone_sees_all or row.owner == principal.owner or row.on_behalf_of == obo(principal):
+        if everyone_sees_all:
+            return row
+        if row.owner == principal.owner and principal.actor_ref in (None, row.actor):
+            return row
+        if row.actor is not None and row.actor == acting_service(principal):
             return row
         raise ApiError(404, "task not found")
+
+    def may_cancel(row: TaskRow, principal: Principal) -> bool:
+        """Only the submitter: the same owner + actor pair, or the acting service itself (also
+        after a restart, with its own token). The owner alone cannot cancel what a service
+        submitted for them (that is the service's job, e.g. WES CancelRun)."""
+        if row.owner == principal.owner and row.actor == principal.actor_ref:
+            return True
+        return row.actor is not None and row.actor == acting_service(principal)
 
     def view_of(value: str | None) -> str:
         view = value or "MINIMAL"
@@ -134,23 +171,59 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         (they would make the body be read first)."""
         return principal_of(request, "tes.submit")
 
+    def caller_token(request: Request) -> str | None:
+        """The raw Bearer, needed only to exchange it for the caller's Passport (D-069). Not
+        stored anywhere."""
+        return bearer_token(request) if drs_inputs is not None else None
+
+    def resolve_drs_inputs(task: dict[str, Any], token: str | None) -> list[str]:
+        """Replace drs:// inputs (marked by validate_task) with signed URLs. Returns the notes
+        for the system log (the drs:// URIs, never the URLs' query)."""
+        pending = [(i, inp.pop("_drs")) for i, inp in enumerate(task.get("inputs", []))
+                   if "_drs" in inp]  # fmt: skip
+        if not pending:
+            return []
+        if drs_inputs is None or token is None:  # validate_task only marks when enabled
+            raise ApiError(400, "drs:// inputs are not enabled on this TES")
+        notes = []
+        for i, url in drs_inputs.resolve(pending, token).items():
+            try:
+                fetcher.check(url)  # the signed URL must be one the runner may fetch (NEG-SSRF)
+            except FetchError as exc:
+                raise ApiError(400, f"inputs[{i}].url: resolved to {exc.reason}") from exc
+            task["inputs"][i]["url"] = url
+            notes.append(f"inputs[{i}]: {redact(dict(pending)[i])} resolved at the DRS")
+        return notes
+
     # FastAPI resolves dependencies in argument order: auth -> count while reading (64 MiB) -> JSON.
     # Without auth, 401 before reading the body. JSON parsing stays on the loop (moving it to a
     # thread would not help while holding the GIL; the remaining limit is D-056)
     submitter = Depends(submit_principal)
+    token_of = Depends(caller_token)
     task_body = Depends(json_body(MAX_BODY))
 
     @router.post("/tasks")
-    def create_task(principal: Principal = submitter, body: Any = task_body) -> dict[str, str]:
+    def create_task(
+        principal: Principal = submitter, token: str | None = token_of, body: Any = task_body
+    ) -> dict[str, str]:
+        # A resend with the owner's earlier yai.submit_nonce (D-071) gets the earlier id before
+        # anything else: no validation (its outputs may exist by now), no drs:// resolution
+        sent_tags = body.get("tags") if isinstance(body, dict) else None
+        nonce = sent_tags.get("yai.submit_nonce") if isinstance(sent_tags, dict) else None
+        if isinstance(nonce, str) and nonce:
+            earlier = db.task_by_nonce(principal.owner, nonce)
+            if earlier is not None:
+                return {"id": earlier}
         task, warnings = validate_task(
             body, principal, files_root=files_root, fetcher=fetcher, limits=limits,
-            output_owner=db.output_owner,
+            output_owner=db.output_owner, drs_enabled=drs_inputs is not None,
         )  # fmt: skip
         tags = task["tags"]
+        notes = resolve_drs_inputs(task, token)
         try:
             task_id = db.create(
                 new_id("t"), principal.owner, task, clock.now(),
-                on_behalf_of=tags.get("yai.on_behalf_of"), run_id=tags.get("yai.run_id"),
+                actor=principal.actor_ref, run_id=tags.get("yai.run_id"),
                 nonce=tags.get("yai.submit_nonce"), max_active=max_active,
             )  # fmt: skip
         except TaskLimit:
@@ -159,6 +232,8 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         for w in warnings:
             db.add_system_log(task_id, 0, w)
             log.warning("task %s: %s", task_id, w)
+        for note in notes:
+            db.add_system_log(task_id, 0, note)
         return {"id": task_id}
 
     @router.get("/tasks")
@@ -189,6 +264,7 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         rows = db.list_visible(
             None if everyone_sees_all else who, snapshot_seq=page.snapshot_seq,
             after_seq=page.after_seq, name_prefix=q.get("name_prefix"), state=state,
+            as_actor=acting_service(principal), actor=principal.actor_ref,
         )  # fmt: skip
         rows = [r for r in rows if tags_match(tag_filter, r.task.get("tags") or {})]
         chosen = rows[:size]
@@ -213,7 +289,7 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     def cancel_task(task_id: str, request: Request) -> dict[str, Any]:
         principal = principal_of(request, "tes.cancel")
         row = visible(db.get(task_id), principal)
-        if not everyone_sees_all and row.owner != principal.owner:
+        if not everyone_sees_all and not may_cancel(row, principal):
             raise ApiError(403, "only the submitter can cancel")  # delegated tasks: submitter only
         for _ in range(5):
             if row.state in TERMINAL or row.state == "CANCELING":

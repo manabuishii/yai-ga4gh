@@ -15,10 +15,10 @@ from typing import Any
 
 import pytest
 
+from yai.common.resolver import DrsResolver
 from yai.common.timeutil import Clock
 from yai.wes.db import WesDb
 from yai.wes.engine import Engine, EngineConfig
-from yai.wes.resolver import DrsResolver
 from yai.wes.tes_client import TesError
 
 TOOL = """\
@@ -49,12 +49,17 @@ class FakeTes:
         self.state_override: str | None = None  # state returned by GetTask (UNKNOWN etc.)
         self.tick = 0  # seconds the clock advances per call
         self.cancels: list[str] = []
+        self.tokens_seen: list[str | None] = []  # token of each call (D-067)
+        self.create_tokens: list[str | None] = []  # token of each CreateTask
+        self.reject_token = False  # reads with an exchanged token answer 401 (expired)
 
     def _advance(self) -> None:
         self.clock.offset += self.tick
 
-    def create(self, task: dict[str, Any]) -> str:
+    def create(self, task: dict[str, Any], token: str | None = None) -> str:
         self._advance()
+        self.tokens_seen.append(token)
+        self.create_tokens.append(token)
         nonce = task["tags"]["yai.submit_nonce"]
         self.nonces_sent.append(nonce)
         if self.create_mode == "busy":
@@ -67,16 +72,19 @@ class FakeTes:
             raise TesError("timeout", ambiguous=True)
         return task_id
 
-    def get(self, task_id: str) -> dict[str, Any]:
+    def get(self, task_id: str, token: str | None = None) -> dict[str, Any]:
         self._advance()
+        self.tokens_seen.append(token)
         if not self.reachable:
             raise TesError("unreachable")
+        if token is not None and self.reject_token:
+            raise TesError("GetTask answered 401", status=401)
         state = self.tasks[task_id]["state"]
         if self.state_override and state not in ("CANCELED", "COMPLETE"):
             state = self.state_override
         return {"id": task_id, "state": state}
 
-    def cancel(self, task_id: str) -> None:
+    def cancel(self, task_id: str, token: str | None = None) -> None:
         self._advance()
         if not self.reachable:
             raise TesError("unreachable")
@@ -84,8 +92,11 @@ class FakeTes:
         if self.tasks[task_id]["state"] not in ("COMPLETE", "EXECUTOR_ERROR", "SYSTEM_ERROR"):
             self.tasks[task_id]["state"] = "CANCELED"
 
-    def find_by_nonce(self, nonce: str) -> str | None:
+    def find_by_nonce(self, nonce: str, token: str | None = None) -> str | None:
         self._advance()
+        self.tokens_seen.append(token)
+        if token is not None and self.reject_token:
+            raise TesError("ListTasks answered 401", status=401)
         if not self.reachable or self.find_fails > 0:
             self.find_fails = max(0, self.find_fails - 1)
             raise TesError("ListTasks unreachable")
@@ -470,6 +481,22 @@ def test_drs_resolution_log_hides_both_queries_but_task_gets_the_url(rig):
     assert "CANARY" not in logs
 
 
+def test_drs_inputs_pass_through_when_the_tes_resolves_them(rig):
+    """D-069 (resolver.resolve_in_wes: false): drs:// inputs reach the TES unchanged, nothing is
+    resolved in the WES and no Passport is needed for the step."""
+    (rig.tmp / "tool.cwl").write_text(FILE_TOOL)
+    rig.engine.cfg.resolve_drs = False
+    rig.engine.resolver = None  # type: ignore[assignment]  # must not be touched
+    req = signed_request()
+    req["workflow_params"] = {k: req["workflow_params"][k] for k in ("a", "b")}
+    rig.db.create_run("rp", ("iss", "sub"), req, rig.clock.now(), True, [("t", [])])
+    run = rig.db.get_run("rp")
+    assert run is not None
+    task = rig.engine.build_task(run)  # no passports held: no LostCredentials
+    urls = {i["name"]: i["url"] for i in task["inputs"]}
+    assert urls["b"] == "drs://drs.yai.test/obj1?CANARY-b"
+
+
 def test_old_finished_runs_are_scrubbed_on_start(tmp_path):
     """Also removed from requests of runs finished by an older version (cleared at startup)."""
     path = tmp_path / "wes.sqlite"
@@ -597,3 +624,65 @@ def test_NEG_WES_RUN_LIMIT(tmp_path):
     done = next(r.id for r in db.runs_in(("QUEUED",)) if r.owner == ("iss", "a"))
     assert db.transition(done, "QUEUED", "CANCELED", 0)
     assert make("next") and not make("again")
+
+
+# --- D-067: the exchanged TES token lives in memory, like the Passport ---
+
+
+def test_delegated_token_is_used_and_dropped(rig):
+    """The run's exchanged token goes on every TES call and is dropped when the run ends."""
+    run_id = rig.run()
+    rig.db.create_run("rd", ("iss", "sub"), {"workflow_params": {"script": "true"}},
+                      rig.clock.now(), False, [("tool", [])], delegated=True)  # fmt: skip
+    rig.engine.start("rd", [], token="exchanged")
+    until(lambda: rig.state("rd") in ("RUNNING", "COMPLETE"))
+    assert rig.tes.tokens_seen and all(t == "exchanged" for t in rig.tes.tokens_seen)
+    rig.tes.tasks["t1"]["state"] = "COMPLETE"
+    until(lambda: rig.state("rd") == "COMPLETE")
+    assert "rd" not in rig.engine.tokens
+    del run_id
+
+
+def test_delegated_run_fails_when_token_lost_on_restart(rig):
+    """A delegated run whose step is not yet submitted after a restart ends in SYSTEM_ERROR (the
+    token is gone; the engine never silently submits as the service), like a lost Passport."""
+    rig.db.create_run("rd", ("iss", "sub"), {"workflow_params": {"script": "true"}},
+                      rig.clock.now(), False, [("tool", [])], delegated=True)  # fmt: skip
+    assert rig.db.transition("rd", "QUEUED", "INITIALIZING", rig.clock.now())
+    rig.restart().drive("rd")
+    assert rig.state("rd") == "SYSTEM_ERROR"
+    assert rig.tes.nonces_sent == []
+    assert any(
+        "credentials held for this run are gone" in line
+        for line in rig.db.get_run("rd").system_logs
+    )  # type: ignore[union-attr]
+
+
+def test_resubmit_never_uses_the_service_token_for_a_delegated_run(rig):
+    """CreateTask fails ambiguously (503), the nonce search gets 401 for the exchanged token and
+    falls back to the service token, the task is absent: the next CreateTask is not sent as the
+    service. The run ends in SYSTEM_ERROR with no task owned by the WES."""
+    rig.db.create_run("rd", ("iss", "sub"), {"workflow_params": {"script": "true"}},
+                      rig.clock.now(), False, [("tool", [])], delegated=True)  # fmt: skip
+    rig.tes.create_mode = "busy"
+    rig.tes.reject_token = True
+    rig.engine.start("rd", [], token="expired-soon")
+    until(lambda: rig.state("rd") == "SYSTEM_ERROR")
+    assert rig.tes.create_tokens and all(t == "expired-soon" for t in rig.tes.create_tokens)
+    assert rig.tes.tasks == {}
+    logs = rig.db.get_run("rd").system_logs  # type: ignore[union-attr]
+    assert any("credentials held for this run are gone" in line for line in logs)
+
+
+def test_watch_falls_back_to_service_token_when_exchanged_token_rejected(rig):
+    """TES answers 401 to the exchanged token (expired): the watch continues with the service
+    token (None here) instead of counting it as unreachable."""
+    rig.db.create_run("rd", ("iss", "sub"), {"workflow_params": {"script": "true"}},
+                      rig.clock.now(), False, [("tool", [])], delegated=True)  # fmt: skip
+    rig.tes.reject_token = True
+    rig.engine.start("rd", [], token="expired")
+    until(lambda: rig.state("rd") in ("RUNNING", "COMPLETE"))
+    until(lambda: None in rig.tes.tokens_seen)
+    assert "rd" not in rig.engine.tokens
+    rig.tes.tasks["t1"]["state"] = "COMPLETE"
+    until(lambda: rig.state("rd") == "COMPLETE")

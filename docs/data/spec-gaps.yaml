@@ -161,6 +161,15 @@ gaps:
   check: 原文
   where:
   - a56
+- id: G-DRS-17
+  section: drs
+  kind: 漏れ
+  body: '`Authorizations` は「どの種類の資格情報か」(`supported_types`)と「どの発行者か」(`passport_auth_issuers`)までで、**どの Visa(type と value)が要るか**を出す欄が無い。振り分け役(TES のゲートウェイ)は、Passport を DRS に送って断られるまで「この入力はどの dataset か」を知れない。利用者が複数の dataset の Visa を持つとき、拠点ごとの許可で先を絞れない(TES のゲートウェイで Passport を扱った実測、2026-11-09)'
+  source: '`drs/openapi/components/schemas/Authorizations.yaml`'
+  yai: 'yai-drs は方針が `dataset` のとき `yai_required_visas: [{type: ControlledAccessGrants, value: <dataset>}]` を足す(D-072、yai の拡張、設定で切れる)。OPTIONS は認証なしなので dataset の ID は誰にでも見える(G-DRS-13 と同じ受け入れ)'
+  check: 原文
+  where:
+  - drs
 - id: G-TES-01
   section: tes
   kind: 漏れ
@@ -206,7 +215,7 @@ gaps:
   kind: 漏れ
   body: 入力・出力の取得に使う資格情報を渡す欄が無い(`tesInput` は `url` だけ、ヘッダーも無い)
   source: '`tes/…` `tesInput`'
-  yai: 署名付き URL で渡す(D-007、`system.md` 3 節)。TES 自身が DRS を解決するのは「あとで深める」の独自拡張
+  yai: '署名付き URL で渡す(D-007、`system.md` 3 節)。yai-tes は設定 `drs.enabled` で `drs://` を自分でも解く(D-069、yai の拡張): 呼び手の Bearer が利用者の Passport-Scoped Access Token のとき、AAI 1.2 の手順で Passport に替えて解き、署名付き URL だけを保存する'
   check: 原文
   where:
   - a10
@@ -411,7 +420,7 @@ gaps:
   kind: 組み合わせ
   body: AAI 1.2 では Passport-Scoped Access Token はクライアントと Broker の間だけで使う。一方 DRS は `BearerAuth` を認めるが、その Bearer が何であるべきかは決めていない
   source: '`aai/AAIConnectProfile.md:328`、DRS `Auth.md`'
-  yai: DRS の Bearer は yai の AT(`aud=yai-drs`)だけ。PSAT が来たら(`scope` に `ga4gh_passport_v1`)401
+  yai: 'DRS の Bearer は yai の AT(`aud=yai-drs`)だけ。PSAT が来たら(`scope` に `ga4gh_passport_v1`)401。例外は `drs://` を解く TES(D-069): 自分あての PSAT を受けて Passport に替える'
   check: 原文
   where:
   - a16
@@ -478,7 +487,7 @@ gaps:
   kind: 漏れ
   body: WES・TES の Bearer と AAI の関係が無い(どのトークンを受けるべきか)
   source: WES `:49`、TES `:56`
-  yai: yai の AT(D-008)。Passport を Bearer にしない
+  yai: yai の AT(D-008)。Passport を Bearer にしない。サービスが利用者の代わりに次のサービスを呼ぶときは、利用者の AT を RFC 8693 で宛先の AT に交換し `act` に自分を入れる(D-067、yai の拡張)。TES は `sub` を持ち主、`act.sub` を代理として扱う
   check: 原文
   where:
   - a04
@@ -504,6 +513,25 @@ gaps:
   check: 原文
   where:
   - ch
+- id: G-AAI-11
+  section: aai
+  kind: 漏れ
+  body: Passport の Token Exchange は「client 認証」「subject_token は有効な PSAT」までで、**どの client がどの PSAT を交換できるか**(PSAT の `aud` と client の対応、利用者の同意)は決めていない。PSAT を Broker 以外へ渡さないのは図の説明(非規範)だけ。利用者の代わりに動くサービス(WES・TES)が Passport を得る道も無い(RFC 8693 の `act` に当たるものが Passport に無い)
+  source: '`aai/AAIConnectProfile.md` Conformance For Passport Issuers 3(2〜6)、Full Login and Token Exchange Interaction'
+  yai: 'Broker の方針として狭める(D-069): 頼んだ client のサービス名が PSAT の `aud` に入っているときだけ Passport に替える(PSAT の `aud` は「あれば relying party の client ID を含む MUST」)。`aud` の無い PSAT は断る。サービスが利用者の代わりに持つ PSAT は、D-067 の AT→AT の交換で client の `scopes` に `openid ga4gh_passport_v1` が有るときに出る(yai の拡張)。WES はその PSAT を Passport に替えられない(`aud` は TES)。この PSAT の scope は Broker の client の設定から付くもので、利用者の同意の事実(OIDC の同意画面)は無い: 試験用 Broker では設定が同意の代わり。本物の Broker では UserInfo が有効な PSAT に client 認証なしで Visa を返す(MUST)ので、PSAT を渡すことは Visa を読む権利を渡すこと。`aud` の検査で閉じるのは yai-aai の交換の道だけ(G-AAI-12)'
+  check: 原文
+  where:
+  - broker
+  - a09
+- id: G-AAI-12
+  section: aai
+  kind: 組み合わせ
+  body: Broker は UserInfo Endpoint も持たねばならず(Broker の条件 2)、「有効な PSAT を見せられたら Visa を返す MUST」(2.2)。PSAT の `aud` は relying party の client ID で Broker ではないので、UserInfo では「誰が持ってきたか」を `aud` で縛れない。PSAT を下流(WES・TES)に渡す形では、Token Exchange を `aud` で狭めても UserInfo から Visa を読む道が残る
+  source: '`aai/AAIConnectProfile.md` Conformance for Brokers 2(2.1・2.2)、Passport-Scoped Access Token の `aud`'
+  yai: 'yai-aai は UserInfo を持たない(試験用 Broker。Token Exchange が SHOULD で優先、2.1)ので今は道が無い。足すときはこの穴を扱う(例: PSAT の持ち主が client 認証で名乗る形は OIDC の UserInfo に無い)。提案 S-3 の材料'
+  check: 原文
+  where:
+  - broker
 - id: G-X-01
   section: x
   kind: 組み合わせ
@@ -572,6 +600,16 @@ gaps:
   body: 同じ GA4GH の service-info 1.0.0 の拡張なのに、WES 1.1.0 の `ServiceInfo` は `tags`(string→string)を **required** とし、TES 1.1 の `tesServiceInfo` には `tags` が無い(`tags` は Task にだけ)。追加の項目は schema で禁じられていないが、TES の厳密なクライアント(py-tes 1.1.4 の attrs の型)は知らない項目を拒む(INTEROP-TES-1、2026-10-17)
   source: '`wes/workflow_execution_service.openapi.yaml:638`・`:651`(required)、`tes/task_execution_service.openapi.yaml:660`(tesServiceInfo)・`:801`(Task の tags)'
   yai: WES の service-info には `tags` を入れ、TES の service-info には入れない(D-040、ユーザー 2026-10-17 15:51)。実行役の種類は TES の `description` に書く
+  check: 原文
+  where:
+  - tes
+  - wes
+- id: G-X-08
+  section: x
+  kind: 組み合わせ
+  body: TES に資格情報の欄が無いので(G-TES-05)、入力は署名付き URL(期限つきの資格情報をクエリに含む)で渡すしかない。TES の振り分け役(ゲートウェイ)はタスクを保存するので、その URL が振り分け役の DB にも残る。仕様にはタスクの中の URL を秘密として扱う決まりが無い。proTES v0.5.0 は `user:password@` の形だけを消し(`url_credentials`)、クエリの署名は MongoDB の `tasks.task`・`tasks.task_original` にそのまま保存する(Passport のデモで実測、2026-11-09)
+  source: '`tes/task_execution_service.openapi.yaml` の `tesInput.url`、proTES v0.5.0 `docs/configuration.md`(`url_credentials`)'
+  yai: 'yai-tes は入力を取り終えた書き込み(INITIALIZING → RUNNING)で署名付き URL の問い合わせ部分を消し、終わりの書き込みで `inputs[].content` も消す(D-068・D-043)。yai-wes は終わった run の `request` から消す(D-030)。記録はどちらも問い合わせ部分を書かない。振り分け役や他の TES の保存までは及ばないので、署名付き URL の期限を短くして(既定 60 分)残った URL の害を限る。中継役が署名付き URL を運ばない道として、TES が `drs://` を自分で解く設定(D-069、`drs.enabled` と WES の `resolver.resolve_in_wes: false`)もある'
   check: 原文
   where:
   - tes

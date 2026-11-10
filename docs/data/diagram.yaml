@@ -272,24 +272,44 @@ arrows:
     responsible: URL を出すのは DRS。期限までは誰が持っていても使える(期限は仕様に欄が無い、G-DRS-10)
   - id: a09
     sys: ⑨
-    label: サービスの AT(client_credentials)
+    label: 利用者の AT を TES あてに交換(RFC 8693、act=WES)
     tag_at: 0.78
     from: wes
     to: at-issuer
     kind: call
     certainty: yai
-    decision: D-010
-    responsible: WES は自分のサービスの身元で TES に出す。秘密は設定ファイルに置き git に入れない
+    decision: D-067
+    responsible: WES は利用者の AT(aud=yai-wes)を TES あての AT に交換して使う(sub=利用者、act.sub=WES)。再起動後の見張りと取り消しだけ自分のサービスの AT(client_credentials)。秘密は設定ファイルに置き git に入れない
   - id: a10
     sys: ⑩
-    label: CreateTask(入力は署名付き URL)
+    label: CreateTask(入力は署名付き URL か drs://)
     from: wes
     to: tes
     badge_at: [-27, -42]
     kind: call
     certainty: yai
-    decision: D-010
-    responsible: タスクの持ち主は WES のサービス。利用者は tags の yai.on_behalf_of に書くだけ
+    decision: D-067
+    responsible: タスクの持ち主は利用者(AT の sub)、代理は WES(act.sub)。tags は yai.run_id・yai.submit_nonce だけ。drs:// のまま渡すのは TES が自分で解く設定のとき(D-069)
+  - id: a17
+    sys: ⑰
+    label: 呼び手の PSAT を Passport に交換(TES が drs:// を解くとき)
+    tag_at: 0.35
+    from: tes
+    to: at-issuer
+    kind: call
+    certainty: yai
+    decision: D-069
+    responsible: TES は client 認証で利用者の PSAT を Passport に替える(AAI 1.2 の手順)。Passport は保存しない。既定では切(drs.enabled)
+  - id: a18
+    sys: ⑱
+    label: POST /objects・/access(passports)、TES が解くとき
+    tag_at: 0.7
+    from: tes
+    to: drs
+    kind: call
+    certainty: yai
+    decision: D-069
+    responsible: 送ってよい DRS かの判断は TES(WES と同じ解決役)。Passport を受け入れて渡すかの判断は DRS。署名付き URL だけを保存
   - id: a13
     sys: ⑬
     label: GetTask(view=FULL)・CancelTask
@@ -298,7 +318,7 @@ arrows:
     badge_at: [-27, 22]
     kind: call
     certainty: yai
-    decision: D-010
+    decision: D-067
   - id: t1
     label: 実行を頼む
     from: tes

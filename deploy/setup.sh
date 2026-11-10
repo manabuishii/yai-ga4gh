@@ -76,7 +76,7 @@ mkdir -p "$local_dir/ca-private" && chmod 700 "$local_dir/ca-private"
 [ -f "$certs/ca.srl" ] && mv "$certs/ca.srl" "$local_dir/ca-private/ca.srl"
 
 # --- Secrets ---
-for name in wes-client-secret test-client-secret; do
+for name in wes-client-secret tes-client-secret test-client-secret; do
   [ -f "$local_dir/secrets/$name" ] || openssl rand -hex 24 > "$local_dir/secrets/$name"
 done
 chmod 755 "$local_dir/secrets"
@@ -84,9 +84,11 @@ chmod 644 "$local_dir/secrets/"*   # read by the container user (YAI_UID); a loc
 
 # --- Configs (replace @...@) ---
 wes_secret=$(cat "$local_dir/secrets/wes-client-secret")
+tes_secret=$(cat "$local_dir/secrets/tes-client-secret")
 test_secret=$(cat "$local_dir/secrets/test-client-secret")
 for svc in aai drs tes wes; do
   sed -e "s|@WES_CLIENT_SECRET@|$wes_secret|g" -e "s|@TEST_CLIENT_SECRET@|$test_secret|g" \
+      -e "s|@TES_CLIENT_SECRET@|$tes_secret|g" \
       -e "s|@TES_RUNNER@|$runner|g" -e "s|@TES_JOB_USER@|$job_user|g" \
       "$here/config/$svc.yaml.in" > "$local_dir/config/$svc.yaml"
   chmod 644 "$local_dir/config/$svc.yaml"

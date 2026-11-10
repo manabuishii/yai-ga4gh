@@ -41,6 +41,7 @@ class RunRow:
     end_time: int | None
     outputs: dict[str, Any] | None
     system_logs: list[str]
+    delegated: bool = False  # TES calls use a token exchanged from the user's AT (memory only)
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ class StepRow:
 
 _RUN = (
     "seq, id, owner_iss, owner_sub, state, request_json, needs_passport, created_at, start_time,"
-    " end_time, outputs_json, system_logs_json"
+    " end_time, outputs_json, system_logs_json, delegated"
 )
 _STEP = (
     "run_id, n, name, phase, submit_nonce, tes_task_id, state, cmd_json, exit_code, start_time,"
@@ -128,6 +129,7 @@ def _run(r: tuple) -> RunRow:
         seq=r[0], id=r[1], owner=(r[2], r[3]), state=r[4], request=json.loads(r[5]),
         needs_passport=bool(r[6]), created_at=r[7], start_time=r[8], end_time=r[9],
         outputs=json.loads(r[10]) if r[10] else None, system_logs=json.loads(r[11]),
+        delegated=bool(r[12]),
     )  # fmt: skip
 
 
@@ -152,6 +154,9 @@ class WesDb:
             for col, decl in _ADDED.items():
                 if col not in have:
                     db.execute(f"ALTER TABLE steps ADD COLUMN {col} {decl}")
+            runs_have = {r[1] for r in db.execute("PRAGMA table_info(runs)")}
+            if "delegated" not in runs_have:  # D-067 (old files: runs used the service token)
+                db.execute("ALTER TABLE runs ADD COLUMN delegated INTEGER NOT NULL DEFAULT 0")
             self._scrub_finished(db)
             self._sweep_files(db)
 
@@ -204,6 +209,7 @@ class WesDb:
     def create_run(
         self, run_id: str, owner: tuple[str, str], request: dict[str, Any], now: int,
         needs_passport: bool, steps: list[tuple[str, list[str]]], max_active: int = 0,
+        delegated: bool = False,
     ) -> None:  # fmt: skip
         """Create the run and all steps (phase=planned) in one write. Steps numbered from 1.
         If max_active is positive, raise RunLimit when the owner already has that many unfinished
@@ -215,9 +221,9 @@ class WesDb:
                 raise RunLimit(max_active)
             db.execute(
                 "INSERT INTO runs (id, owner_iss, owner_sub, state, request_json, needs_passport,"
-                " created_at) VALUES (?,?,?,?,?,?,?)",
+                " created_at, delegated) VALUES (?,?,?,?,?,?,?,?)",
                 (run_id, owner[0], owner[1], "QUEUED", json.dumps(request), int(needs_passport),
-                 now),
+                 now, int(delegated)),
             )  # fmt: skip
             db.executemany(
                 "INSERT INTO steps (run_id, n, name, phase, cmd_json) VALUES (?,?,?,?,?)",

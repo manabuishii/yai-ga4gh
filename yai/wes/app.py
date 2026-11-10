@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse
 from starlette.datastructures import UploadFile
 
 from yai.aai.jwtutil import TokenError, unverified_parts
-from yai.aai.service_auth import AtPrincipalResolver, JwtAuthenticator
+from yai.aai.service_auth import AtPrincipalResolver, JwtAuthenticator, bearer_token
 from yai.common import startup
 from yai.common.app import base_app
 from yai.common.body import limited_request, too_deep
@@ -26,16 +26,17 @@ from yai.common.fakes import AnonymousAuthenticator, FixedPrincipalResolver
 from yai.common.fetch import Fetcher, FetchError
 from yai.common.ids import new_id
 from yai.common.paging import PageState, PageTokens
+from yai.common.resolver import DrsResolver
 from yai.common.roles import Principal
 from yai.common.serviceinfo import service_info
 from yai.common.timeutil import Clock, wes_time
 from yai.wes import cwl
 from yai.wes.db import TERMINAL, RunLimit, RunRow, StepRow, WesDb
 from yai.wes.engine import Engine, EngineConfig
-from yai.wes.resolver import DrsResolver
-from yai.wes.tes_client import TesClient
+from yai.wes.tes_client import TesClient, TesError
 
 log = logging.getLogger("yai.wes")
+PSAT_SCOPES = startup.PSAT_SCOPES
 BASE = "/ga4gh/wes/v1"
 STATES = ["UNKNOWN", "QUEUED", "INITIALIZING", "RUNNING", "PAUSED", "COMPLETE", "EXECUTOR_ERROR",
           "SYSTEM_ERROR", "CANCELED", "CANCELING", "PREEMPTED"]  # fmt: skip
@@ -163,8 +164,27 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         token_url=str(tes_cfg.get("token_url", "https://aai.yai.test/token")),
         client_id=str(tes_cfg.get("client_id", "yai-wes")),
         client_secret=Path(secret_file).read_text().strip() if secret_file else "",
+        audience=str(tes_cfg.get("audience", "yai-tes")),
     )
+    # D-067: call TES with a token exchanged from the user's AT (`act` = this WES). false keeps
+    # D-010 (the service identity, tasks owned by the WES), e.g. for a TES without the yai broker
+    delegate = bool(tes_cfg.get("delegate", True))
     res = config.get("resolver", {})
+    # D-069: false leaves drs:// inputs to the TES (a yai-tes with drs.enabled); the WES then
+    # needs no Passport. Default true: the WES resolves them (the (a) of system.md section 3)
+    resolve_in_wes = bool(res.get("resolve_in_wes", True))
+    # scopes asked for in the exchange (D-067): the TES operations, plus the Passport scopes only
+    # when the TES resolves drs:// itself and needs them (D-069). The broker narrows further to
+    # the client's scopes
+    tes_scopes = startup.wes_tes_scopes(tes_cfg)  # never the Passport scopes by configuration alone
+    if not tes_scopes:  # startup.check refused this already; never ask for "all of the client's"
+        raise SystemExit("tes.scopes must name at least one TES scope")
+    if not resolve_in_wes:
+        tes_scopes += sorted(PSAT_SCOPES)
+    tes_scope = " ".join(tes_scopes)
+    # the broker narrows to its client's scopes: if the Passport scopes this WES needs are not
+    # granted, fail the exchange now rather than every run's first drs:// step (D-069)
+    tes_required = PSAT_SCOPES if not resolve_in_wes else frozenset()
     resolver = DrsResolver(
         passport_hosts=list(res.get("passport_hosts", ["drs.yai.test"])),
         host_override=dict(res.get("host_override", {})),
@@ -182,6 +202,7 @@ def create_app(config: dict[str, Any]) -> FastAPI:
         # if relative, make absolute at startup (as a file:// URL)
         output_root=str(Path(eng.get("output_root", "/var/tes/files")).resolve()),
         faults=dict(config.get("faults", {})),
+        resolve_drs=resolve_in_wes,
     )
 
     def workflow_of(run_id: str) -> Path:
@@ -273,6 +294,7 @@ def create_app(config: dict[str, Any]) -> FastAPI:
     @router.post("/runs")
     async def run_workflow(request: Request) -> dict[str, str]:
         principal = await run_in_threadpool(principal_of, request, "wes.run")
+        user_token = bearer_token(request) if principal.kind == "user" else None
         if not request.headers.get("content-type", "").startswith("multipart/form-data"):
             raise ApiError(400, "RunWorkflow needs multipart/form-data")  # WES-RUN-01
         form = await _limited_form(request)
@@ -292,11 +314,12 @@ def create_app(config: dict[str, Any]) -> FastAPI:
                 raise ApiError(400, "each workflow_attachment must be at most 1 MiB")
             attachments.append((part.filename, part.file))
         # other checks, doc fetch, save and DB in a thread (frees the event loop)
-        return await run_in_threadpool(accept_run, principal, fields, attachments)
+        return await run_in_threadpool(accept_run, principal, fields, attachments, user_token)
 
     def accept_run(
-        principal: Principal, fields: dict[str, str | None], attachments: list[tuple[str, Any]]
-    ) -> dict[str, str]:
+        principal: Principal, fields: dict[str, str | None], attachments: list[tuple[str, Any]],
+        user_token: str | None = None,
+    ) -> dict[str, str]:  # fmt: skip
         params_raw = fields["workflow_params"]
         if params_raw is None:
             raise ApiError(400, "workflow_params is required")  # WES-RUN-07
@@ -383,13 +406,25 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             record["workflow_engine"] = engine_name
         if engine_ver:
             record["workflow_engine_version"] = engine_ver
-        needs_passport = any(
+        needs_passport = resolve_in_wes and any(
             loc.startswith("drs://") for _, files in bound for loc, _ in files.values()
         )
         if plan.is_workflow:
             steps = [(s.name, argv) for s, (argv, _) in zip(plan.steps, bound, strict=True)]
         else:
             steps = [(plan.label or PurePosixPath(doc_name).stem, bound[0][0])]
+
+        # Exchange the user's AT for one the TES accepts, with `act` = this WES (D-067). Before
+        # anything is saved: a broker that is down leaves no run behind. Kept in memory only
+        tes_token = None
+        if delegate and user_token is not None:
+            try:
+                tes_token = tes.exchange(user_token, tes_scope, require=tes_required)
+            except TesError as exc:
+                if exc.status == 400:  # the broker refused the user's token (revoked, expired,
+                    # not issued to this WES): the caller's side, not an internal error
+                    raise ApiError(403, "the access token could not be exchanged for TES") from exc
+                raise ApiError(500, f"token exchange for TES failed: {exc.reason}") from exc
 
         run_id = new_id("r")
         run_dir = runs_dir / run_id
@@ -402,13 +437,13 @@ def create_app(config: dict[str, Any]) -> FastAPI:
             wf_dir.mkdir(parents=True, exist_ok=True)
             (wf_dir / doc_name).write_bytes(doc)
             db.create_run(run_id, principal.owner, record, clock.now(), needs_passport, steps,
-                          max_active=max_active)  # fmt: skip
+                          max_active=max_active, delegated=tes_token is not None)  # fmt: skip
         except BaseException as exc:
             shutil.rmtree(run_dir, ignore_errors=True)  # leave no remains of a rejected run
             if isinstance(exc, RunLimit):
                 raise ApiError(429, f"too many unfinished runs (at most {max_active})") from None
             raise
-        engine.start(run_id, passports)
+        engine.start(run_id, passports, tes_token)
         return {"run_id": run_id}
 
     @router.get("/runs")
